@@ -15,29 +15,34 @@
   const CLEAR_COST = RULES.slots.clearCost;
 
   const GY = WORLD.GROUND_Y;
-  const TOTAL_SLOTS = WORLD.MAX_SLOTS + WORLD.LAKE_SLOTS.length;
+  const WATER0 = WORLD.MAX_SLOTS, ISLAND0 = WORLD.MAX_SLOTS + WORLD.LAKE_SLOTS.length;
+  const TOTAL_SLOTS = ISLAND0 + WORLD.ISLAND_SLOTS.length;
   let S = null;
   // camera: base scale from the screen size, zoom on top, x scroll and a vertical nudge (oy)
   const cam = { x: 0, oy: 0, zoom: 1, base: 1, scale: 1, offY: 0, viewW: 0, targetX: null };
   let W = 0, H = 0, dpr = 1;
   let particles = [], floaters = [], drops = [];
   let rainVis = 0, highlightT = 0, selectedSeed = null, scrollDir = 0;
-  let hover = null, focus = null; const mouse = { sx: 0, sy: 0, active: false };
+  let hover = null, focus = null, paused = false; const mouse = { sx: 0, sy: 0, active: false };
   let saveT = 0, hudT = 0, ambientT = 6, lastFrame = performance.now();
   let sheetOpen = false, sheetDismissable = false;
 
-  const isWaterSlot = i => i >= WORLD.MAX_SLOTS;
-  const slotX = i => isWaterSlot(i) ? WORLD.LAKE_SLOTS[i - WORLD.MAX_SLOTS] : WORLD.SLOT_X0 + i * WORLD.SLOT_DX;
-  const slotY = i => isWaterSlot(i) ? Draw.waterY(S.lake) : GY;
-  const slotOpen = i => isWaterSlot(i) || i < S.slotsOpen;
+  const isWaterSlot = i => i >= WATER0 && i < ISLAND0;
+  const isIslandSlot = i => i >= ISLAND0;
+  const slotX = i => isWaterSlot(i) ? WORLD.LAKE_SLOTS[i - WATER0] : isIslandSlot(i) ? WORLD.ISLAND_SLOTS[i - ISLAND0] : WORLD.SLOT_X0 + i * WORLD.SLOT_DX;
+  const slotY = i => isWaterSlot(i) ? Draw.waterY(S.lake) : isIslandSlot(i) ? WORLD.ISLAND_Y : GY;
+  const islandBuilt = () => S.dam.stage >= 4;
+  const slotOpen = i => isWaterSlot(i) || (isIslandSlot(i) ? islandBuilt() : i < S.slotsOpen);
   const seedFits = (id, i) => (PLANTS[id].kind === 'water') === isWaterSlot(i);
+  const lakeFloor = () => Math.max(RULES.rain.lakeFloor, RULES.beaver.floorByStage[Math.min(S.dam.stage, 3)] || 0);
+  const damCost = () => S.dam.stage < 3 ? RULES.beaver.sticksPerStage : RULES.beaver.islandSticks;
   const dayNum = () => Math.floor(S.t / WORLD.CYCLE) + 1;
   const phase = () => S.t % WORLD.CYCLE;
   const isNight = () => phase() >= WORLD.DAY;
   const activeNow = sp => sp.active === 'both' || ((sp.active === 'night') === isNight());
   const totalSeeds = () => Object.values(S.seeds).reduce((a, b) => a + b, 0);
   const landSeeds = () => S.unlocked.filter(k => PLANTS[k].kind !== 'water').reduce((n, k) => n + (S.seeds[k] || 0), 0);
-  const emptyLandSlots = () => { let n = 0; for (let i = 0; i < S.slotsOpen; i++) if (!S.plants[i]) n++; return n; };
+  const emptyLandSlots = () => { let n = 0; for (let i = 0; i < TOTAL_SLOTS; i++) if (!isWaterSlot(i) && slotOpen(i) && !S.plants[i]) n++; return n; };
   const fruitMax = p => PLANTS[p.id].fruit.max + RULES.upgrade.fruitMaxPerLevel * ((p.level || 1) - 1);
   const fruitInterval = p => PLANTS[p.id].fruit.interval * (1 - RULES.upgrade.fruitSpeedPerLevel * ((p.level || 1) - 1));
   const upgradeCost = p => (p.level || 1) + 1;
@@ -55,6 +60,7 @@
       muted: false, started: false, slotsOpen: RULES.slots.start, spawnT: 20, seedlessT: 0, needSeeds: false,
       stats: { planted: 0, seedsGot: 0, grown: 0 }, tips: { controls: true, plants: true },
       sun: { name: 'Sunny', c1: '#ffd84a', c2: '#fff2a8', acc: 'none' }, moon: { name: 'Luna', c1: '#f2f4ff', c2: '#d6dbf0', acc: 'none' },
+      dam: { stage: 0 }, wood: 0, sticks: [], stickT: 20,
     };
   }
   function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { /* storage may be unavailable */ } }
@@ -68,6 +74,7 @@
       s.animals = (s.animals || []).filter(a => ANIMALS[a.sp]);
       s.people = s.people || []; s.queue = s.queue || []; s.stats = s.stats || { planted: 0, seedsGot: 0, grown: 0 }; s.tips = s.tips || {};
       s.slotsOpen = Math.min(s.slotsOpen || RULES.slots.start, WORLD.MAX_SLOTS);
+      s.dam = s.dam || { stage: 0 }; s.wood = s.wood || 0; s.sticks = s.sticks || []; s.stickT = s.stickT || 20;
       s.sun = s.sun || { name: 'Sunny', c1: '#ffd84a', c2: '#fff2a8', acc: 'none' }; s.moon = s.moon || { name: 'Luna', c1: '#f2f4ff', c2: '#d6dbf0', acc: 'none' };
       for (const a of s.animals) { a.anim = a.anim || 0; if (a.state === 'eating') a.state = 'idle'; a.bb = null; }
       for (const p of s.people) { p.anim = 0; p.moving = false; p.planting = false; if (p.task && (p.task.type === 'planting' || p.task.type === 'clearing')) p.task.type = p.task.type === 'planting' ? 'plant' : 'clear'; }
@@ -163,10 +170,10 @@
         free[0].task = { type: 'clear', tx };
         toast(`${free[0].name} is off to clear some jungle! 🌿`, 2500);
       } else {
-        const tx = isWaterSlot(q.slot) ? WORLD.LAKE_X - 30 : slotX(q.slot);
+        const far = isWaterSlot(q.slot) || isIslandSlot(q.slot), tx = far ? WORLD.LAKE_X - 30 : slotX(q.slot);
         free.sort((a, b) => Math.abs(a.x - tx) - Math.abs(b.x - tx));
         const pe = free[0];
-        pe.task = { type: 'plant', tx: isWaterSlot(q.slot) ? tx : tx + (tx > pe.x ? -20 : 20), slot: q.slot, id: q.id };
+        pe.task = { type: 'plant', tx: far ? tx : tx + (tx > pe.x ? -20 : 20), slot: q.slot, id: q.id };
         toast(`${pe.name} is going to plant the ${PLANTS[q.id].name}!`, 2500);
       }
       S.queue.shift();
@@ -185,7 +192,7 @@
     const p = S.plants[slot]; if (!p || !p.pending) return;
     p.pending = false; S.stats.planted++;
     if (isWaterSlot(slot)) splash(slotX(slot), slotY(slot));
-    else { Sound.play('plant'); for (let i = 0; i < 10; i++) particles.push({ x: slotX(slot), y: GY, vx: rand(-40, 40), vy: rand(-90, -30), life: rand(0.4, 0.8), color: '#7a5230', r: rand(1.5, 3) }); }
+    else { Sound.play('plant'); for (let i = 0; i < 10; i++) particles.push({ x: slotX(slot), y: slotY(slot), vx: rand(-40, 40), vy: rand(-90, -30), life: rand(0.4, 0.8), color: '#7a5230', r: rand(1.5, 3) }); }
   }
   function openSlots(n, who) {
     const before = S.slotsOpen;
@@ -221,7 +228,7 @@
     switch (sp.kind) {
       case 'bird': case 'bug': case 'climber': a.x = left ? cam.x - 80 : cam.x + cam.viewW + 80; a.y = GY - rand(180, 380); break;
       case 'ground': a.x = -70; a.y = GY; break;
-      case 'lake': a.x = rand(WORLD.LAKE_X + 90, WORLD.FALLS_X - 40); a.depth = a.sp === 'fish' ? rand(10, 26) : 2; a.y = Draw.waterY(S.lake) + a.depth; splash(a.x, Draw.waterY(S.lake)); break;
+      case 'lake': a.x = zoneX(sp); a.depth = a.sp === 'fish' ? rand(10, 26) : 2; a.y = Draw.waterY(S.lake) + a.depth; splash(a.x, Draw.waterY(S.lake)); break;
       case 'glow': a.x = rand(100, WORLD.LAKE_X - 100); a.y = GY - 60; break;
     }
   }
@@ -247,18 +254,21 @@
       if (Math.random() < (sp.chance || RULES.animals.spawnChance)) { spawn(key); if (++spawned >= RULES.animals.maxPerCheck) break; }
     }
   }
+  // each lake species keeps to its own stretch of water (0 = shore, 1 = waterfall) so the pond does not bunch up
+  function zoneX(sp) { const a = WORLD.LAKE_X + 60, b = WORLD.FALLS_X - 30, z = sp.zone || [0.05, 0.95]; return rand(a + (b - a) * z[0], a + (b - a) * z[1]); }
   function grownPlants() { const out = []; S.plants.forEach((p, i) => { if (p && !p.pending && p.progress >= 1) out.push({ p, i, d: PLANTS[p.id] }); }); return out; }
   function chooseTarget(a) {
     const sp = ANIMALS[a.sp];
     const grown = grownPlants();
-    let pool = grown.filter(g => g.d.kind !== 'water');
-    if (sp.kind === 'bird' || sp.kind === 'climber') pool = grown.filter(g => g.d.kind === 'tree');
-    if (sp.kind === 'bug' || sp.kind === 'glow') pool = grown.filter(g => g.d.kind === 'flower' || g.d.kind === 'water');
+    let pool = grown.filter(g => g.d.kind !== 'water' && !isIslandSlot(g.i));
+    if (sp.kind === 'bird') pool = grown.filter(g => g.d.kind === 'tree');
+    if (sp.kind === 'climber') pool = grown.filter(g => g.d.kind === 'tree' && !isIslandSlot(g.i));
+    if (sp.kind === 'bug' || sp.kind === 'glow') { pool = grown.filter(g => g.d.kind === 'flower' || (g.d.kind === 'water' && Math.random() < 0.3)); if (!pool.length) pool = grown.filter(g => g.d.kind === 'flower' || g.d.kind === 'water'); }
     const tasty = pool.filter(g => g.p.fruit > 0 && sp.eats.includes(g.p.id));
     let choice = null;
     if (tasty.length && (a.giftT <= 0 || Math.random() < 0.5)) choice = pick(tasty);
     else if (pool.length) { const others = pool.filter(g => g.i !== a.slot); choice = pick(others.length ? others : pool); }
-    if (sp.kind === 'lake') { a.slot = -1; a.tx = rand(WORLD.LAKE_X + 80, WORLD.FALLS_X - 40); if (a.sp === 'fish') a.depth = rand(8, 28); return; }
+    if (sp.kind === 'lake') { a.slot = -1; a.tx = zoneX(sp); if (a.sp === 'fish') a.depth = rand(8, 28); return; }
     if (sp.kind === 'ground') {
       a.ty = GY; a.pad = null;
       if (a.sp === 'frog' && Math.random() < 0.55) {
@@ -297,6 +307,8 @@
     a.anim += dt;
     if (sp.kind === 'lake') a.y = Draw.waterY(S.lake) + a.depth + Math.sin(a.anim * 2) * 1.5;
     if (a.pad != null && sp.kind === 'ground') { a.ty = Draw.waterY(S.lake) - 1; if (a.state === 'idle' || a.state === 'eating') a.y = a.ty; }
+    if (sp.swims && a.x > WORLD.LAKE_X + 40 && a.state !== 'fetch' && a.state !== 'moving') a.y = Draw.waterY(S.lake) + 3 + Math.sin(a.anim * 2) * 1.5;
+    if (a.sp === 'beaver' && updateBeaver(a, dt)) return;
     // a plant that was replanted under a perched animal: fly off and pick a new spot
     if (a.slot >= 0 && (!S.plants[a.slot] || S.plants[a.slot].pending) && a.state !== 'away' && a.state !== 'leaving') { a.slot = -1; if (a.state !== 'moving') { chooseTarget(a); a.state = 'moving'; } }
     if (a.state === 'away') { if (active) { a.state = 'arriving'; placeOffscreen(a); chooseTarget(a); if (sp.kind === 'glow') { a.state = 'idle'; a.x = a.tx; a.y = a.ty; } } return; }
@@ -327,6 +339,12 @@
         }
         break;
       }
+      case 'slide': { // otter rides the waterfall down into the plunge pool
+        a.timer -= dt; const k = 1 - Math.max(0, a.timer) / 1.1;
+        a.x = WORLD.FALLS_X + 20 - k * 30; a.y = (GY - 176) + (Draw.waterY(S.lake) + 2 - (GY - 176)) * k * k;
+        if (a.timer <= 0) { splash(a.x, Draw.waterY(S.lake)); a.state = 'idle'; a.timer = rand(6, 14); a.tx = a.x; }
+        break;
+      }
       case 'idle': {
         a.timer -= dt;
         if (sp.gift && a.giftT > 0) a.giftT -= dt;
@@ -336,7 +354,11 @@
           else if (tryEat(a)) break;
           else if (!anyFoodPlanted(sp)) { if (Math.random() < RULES.animals.noFoodGiftChance) giveGift(a); a.giftT = sp.gift; }
         }
-        if (a.timer <= 0) { chooseTarget(a); a.state = 'moving'; }
+        if (a.timer <= 0) {
+          if (a.sp === 'otter' && Math.random() < 0.45) { a.state = 'slide'; a.timer = 1.1; Sound.play('splash'); break; }
+          if (a.sp === 'beaver' && beaverDecide(a)) break;
+          chooseTarget(a); a.state = 'moving';
+        }
         break;
       }
       case 'eating': {
@@ -349,6 +371,43 @@
         break;
       }
     }
+  }
+  // ---------- beaver: collects sticks, builds the dam in stages, then the island ----------
+  function beaverDecide(a) {
+    if (S.sticks.length) { const st = S.sticks.reduce((b, s) => Math.abs(s.x - a.x) < Math.abs(b.x - a.x) ? s : b); a.state = 'fetch'; a.tx = st.x; a.ty = GY; a.slot = -1; return true; }
+    if (S.dam.stage < 4 && S.wood >= damCost()) { a.state = 'toDam'; a.tx = WORLD.DAM_X - 30; a.ty = Draw.waterY(S.lake) + 3; a.slot = -1; return true; }
+    return false;
+  }
+  function updateBeaver(a, dt) {
+    const sp = ANIMALS.beaver;
+    if (a.state === 'fetch') {
+      if (moveToward(a, dt, sp.speed)) { const k = S.sticks.findIndex(s => Math.abs(s.x - a.x) < 3); if (k >= 0) collectStick(k, a.name); a.state = 'idle'; a.timer = 1; }
+      return true;
+    }
+    if (a.state === 'toDam') {
+      a.ty = Draw.waterY(S.lake) + 3;
+      if (moveToward(a, dt, sp.speed)) { a.state = 'building'; a.timer = RULES.beaver.buildTime; }
+      return true;
+    }
+    if (a.state === 'building') {
+      a.timer -= dt; a.y = Draw.waterY(S.lake) + 3 + Math.abs(Math.sin(a.anim * 12)) * -3;
+      if (a.timer % 0.5 < dt) particles.push({ x: WORLD.DAM_X + rand(-14, 14), y: Draw.waterY(S.lake), vx: rand(-20, 20), vy: rand(-80, -30), life: 0.6, color: '#a9743d', r: 2 });
+      if (a.timer <= 0) { S.wood -= damCost(); buildDam(a.name); a.state = 'idle'; a.timer = rand(4, 8); }
+      return true;
+    }
+    return false;
+  }
+  function collectStick(k, who) {
+    const st = S.sticks[k]; S.sticks.splice(k, 1); S.wood++;
+    Sound.play('pop'); floaters.push({ x: st.x, y: GY - 20, text: '🪵 +1', life: 1.5 }); sparkle(st.x, GY - 6, '#d9b48a');
+    renderSeedBar(); updateHud(); save();
+  }
+  function buildDam(who) {
+    S.dam.stage++; Sound.play('fanfare'); sparkle(WORLD.DAM_X, Draw.waterY(S.lake) - 20, '#ffd21f');
+    const msgs = [null, `🦫 ${who} started the dam! The lake will not drop below ${Math.round(lakeFloor() * 100)}% now.`, `🦫 The dam is getting taller! Lake floor is ${Math.round(lakeFloor() * 100)}%.`, `🦫 The dam is finished! The lake stays at least ${Math.round(lakeFloor() * 100)}% full. ${RULES.beaver.islandSticks} more sticks and ${who} will build an island!`, `🏝️ ${who} built a little island! Two new planting spots in the lake.`];
+    toast(msgs[Math.min(S.dam.stage, 4)], 7000, { big: true });
+    if (S.dam.stage >= 4) { WORLD.ISLAND_SLOTS.forEach((x, k) => sparkle(x, WORLD.ISLAND_Y - 10, '#fff')); }
+    updateHud(); save();
   }
   function anyFoodPlanted(sp) { return S.plants.some(p => p && !p.pending && p.progress >= 1 && sp.eats.includes(p.id)); }
   function tryEat(a) {
@@ -408,7 +467,7 @@
       S.rain.left -= dt; S.lake = Math.min(1, S.lake + RULES.rain.lakeFill * dt);
       if (S.rain.left <= 0) { S.rain.on = false; S.rain.next = rand(...RULES.rain.gap); Sound.setRain(false); toast('🌈 The rain stopped. The lake is fuller!', 4000); }
     } else {
-      S.rain.next -= dt; S.lake = Math.max(RULES.rain.lakeFloor, S.lake - RULES.rain.lakeDrain * dt);
+      S.rain.next -= dt; S.lake = Math.max(lakeFloor(), S.lake - RULES.rain.lakeDrain * dt);
       if (S.rain.next <= 0) { S.rain.on = true; S.rain.left = rand(...RULES.rain.length); Sound.setRain(true); toast('🌧️ Rain is coming! Plants grow faster and the lake fills up.', 5000); }
     }
 
@@ -430,6 +489,10 @@
     S.spawnT -= dt; if (S.spawnT <= 0) { S.spawnT = RULES.animals.spawnEvery; trySpawn(); }
     for (const a of S.animals) updateAnimal(a, dt);
 
+    if (S.dam.stage < 4 && S.animals.some(a => a.sp === 'beaver') && S.sticks.length < RULES.beaver.maxSticks) {
+      S.stickT -= dt;
+      if (S.stickT <= 0) { S.stickT = RULES.beaver.stickEvery; const trees = grownPlants().filter(g => g.d.kind === 'tree' && g.i < WORLD.MAX_SLOTS); if (trees.length) { const g = pick(trees); S.sticks.push({ x: slotX(g.i) + rand(-34, 34), r: rand(-0.5, 0.5) }); Sound.play('pop'); } }
+    }
     S.needSeeds = landSeeds() === 0 && emptyLandSlots() > 0;
     if (S.needSeeds) { S.seedlessT += dt; if (S.seedlessT > RULES.seeds.fallbackAfter) { S.seedlessT = 0; fallbackSeed(); } } else S.seedlessT = 0;
 
@@ -460,6 +523,8 @@
     Draw.drawLakeBasin(ctx);
     Draw.drawCliff(ctx);
     Draw.drawWater(ctx, S.lake, t);
+    Draw.drawIsland(ctx, islandBuilt(), t);
+    Draw.drawDam(ctx, S.dam.stage, S.lake, t, S.dam.stage ? clamp((S.lake - RULES.beaver.spillAt) / (1 - RULES.beaver.spillAt), 0, 1) : 0);
     Draw.drawFalls(ctx, S.lake, t);
     WORLD.LILY_PADS.forEach((px, i) => Draw.drawLilyPad(ctx, px, Draw.waterY(S.lake), t, i));
     for (const a of S.animals) if (ANIMALS[a.sp].kind === 'lake' && a.state !== 'away') { if (isHover('animal', a) && a.bb) drawGlow(a.bb, c => drawAnimal(a, t, c, true), t); drawAnimal(a, t); }
@@ -469,6 +534,7 @@
     const hl = selectedSeed ? (PLANTS[selectedSeed].kind === 'water' ? 'water' : 'land') : null;
     for (let i = 0; i < TOTAL_SLOTS; i++) {
       const water = isWaterSlot(i);
+      if (isIslandSlot(i) && !slotOpen(i)) continue;
       if (!slotOpen(i)) { if (isHover('bush', i)) drawGlow(hoverBox(hover), c => Draw.drawBush(c, slotX(i), t), t); Draw.drawBush(ctx, slotX(i), t); continue; }
       const p = S.plants[i], x = slotX(i), y = slotY(i);
       if (isHover(p ? 'plant' : 'empty', i)) drawGlow(hoverBox(hover), c => { if (!p || p.pending) { if (water) Draw.drawWaterSpot(c, x, y, t, 0); else Draw.drawMound(c, x, 0); if (!p) Draw.drawPlantButton(c, x, y, t, false); } else Draw.drawPlant(c, x, y, PLANTS[p.id], p, t, night); }, t);
@@ -477,6 +543,7 @@
       else Draw.drawPlant(ctx, x, y, PLANTS[p.id], p, t, night);
     }
 
+    for (const st of S.sticks) { if (isHover('stick', S.sticks.indexOf(st))) drawGlow({ x: st.x - 14, y: GY - 10, w: 28, h: 18 }, c => Draw.drawStick(c, st.x, GY + 2, st.r, t), t); Draw.drawStick(ctx, st.x, GY + 2, st.r, t); }
     const ents = [];
     for (const pe of S.people) ents.push({ y: pe.y, pe });
     for (const a of S.animals) { const k = ANIMALS[a.sp].kind; if (k !== 'lake' && k !== 'glow' && a.state !== 'away') ents.push({ y: a.y, a }); }
@@ -524,7 +591,7 @@
     }
     a.bb = { x: a.x - 36, y: y - 62, w: 72, h: 70 };
   }
-  const isHover = (type, key) => !!hover && hover.type === type && (type === 'animal' ? hover.a === key : type === 'person' ? hover.pe === key : hover.i === key);
+  const isHover = (type, key) => !!hover && hover.type === type && (type === 'animal' ? hover.a === key : type === 'person' ? hover.pe === key : type === 'stick' ? hover.k === key : hover.i === key);
   // Soft glow that hugs the real shape: draw the thing onto an offscreen canvas, then paint only that image's blurred shadow underneath it.
   const glowCanvas = document.createElement('canvas'), gctx = glowCanvas.getContext('2d');
   function drawGlow(bb, fn, t) {
@@ -592,6 +659,10 @@
     btn.addEventListener('pointerup', end); btn.addEventListener('pointercancel', end); btn.addEventListener('lostpointercapture', end);
   }
   holdScroll($('btnLeft'), -1); holdScroll($('btnRight'), 1);
+  function setPaused(p) { paused = p; $('btnPause').textContent = p ? '▶️' : '⏸️'; $('pauseOverlay').classList.toggle('hidden', !p); if (p) save(); else lastFrame = performance.now(); }
+  $('btnPause').onclick = () => { Sound.init(); Sound.play('click'); setPaused(!paused); };
+  $('btnResume').onclick = () => { Sound.play('chime'); setPaused(false); };
+  document.addEventListener('visibilitychange', () => { if (document.hidden && S && S.started) setPaused(true); });
   $('btnZoomIn').onclick = () => { Sound.init(); Sound.play('click'); setZoom(cam.zoom * 1.3); };
   $('btnZoomOut').onclick = () => { Sound.init(); Sound.play('click'); setZoom(cam.zoom / 1.3); };
 
@@ -609,6 +680,8 @@
     for (const pe of S.people) if (inBB(pe.bb)) cands.push({ type: 'person', pe, bb: pe.bb, d: Math.hypot(pe.x - x, pe.bb.y + pe.bb.h / 2 - y) });
     if (cands.length) return cands.sort((u, v) => u.d - v.d)[0];
     if (Math.abs(x - WORLD.CAVE_X) <= 60 && y > GY - 100 && y < GY + 10) return { type: 'cave' };
+    for (let k = 0; k < S.sticks.length; k++) if (Math.abs(x - S.sticks[k].x) <= 16 && y > GY - 18 && y < GY + 14) return { type: 'stick', k, bb: { x: S.sticks[k].x - 14, y: GY - 10, w: 28, h: 18 } };
+    if (S.dam.stage && Math.abs(x - WORLD.DAM_X) <= 22 && y > GY - 40 && y < GY + 80) return { type: 'dam' };
     const sm = Draw.sunMoonPos(phase());
     if (Math.hypot(x - sm.x, y - sm.y) <= 48) return { type: 'sky', sun: sm.sun, body: sm.sun ? S.sun : S.moon, bb: { x: sm.x - 40, y: sm.y - 40, w: 80, h: 80 } };
     for (let i = 0; i < TOTAL_SLOTS; i++) {
@@ -637,6 +710,8 @@
       case 'plant': if (h.p.pending) toast(`${PLANTS[h.p.id].emoji} A ${PLANTS[h.p.id].name} seed is about to be planted.`); else showPlantSheet(h.i); break;
       case 'sky': showSkySheet(h.sun); break;
       case 'lake': toast(`💧 The lake is ${Math.round(S.lake * 100)}% full. Rain fills it up! Water lilies grow on the floating spots.`); break;
+      case 'stick': collectStick(h.k, 'You'); break;
+      case 'dam': toast(S.dam.stage >= 4 ? '🦫 The dam and the island are done! The lake never drops below ' + Math.round(lakeFloor() * 100) + '%.' : `🦫 Dam stage ${S.dam.stage} of 3. The beaver needs ${damCost()} sticks for the next bit (you have ${S.wood}). Tap sticks under the trees!`); break;
       case 'cave': { const inside = S.animals.filter(a => ANIMALS[a.sp].home === 'cave' && a.state === 'sleep').map(a => a.name); toast(inside.length ? `🕳️ Shh! ${inside.join(' and ')} ${inside.length > 1 ? 'are' : 'is'} sleeping in the cave.` : '🕳️ The cave. Bats sleep here by day and the bear sleeps here at night.'); break; }
       case 'falls': Sound.play('splash'); toast('🌊 The waterfall! Frogs love hopping on the lily pads below it.'); break;
     }
@@ -655,6 +730,7 @@
       case 'animal': return (h.a.named ? h.a.name : ANIMALS[h.a.sp].name) + (h.a.state === 'sleep' ? ' 💤' : h.a.state === 'eating' ? ' 😋' : '');
       case 'person': return h.pe.name;
       case 'sky': return `${h.sun ? '☀️' : '🌙'} ${h.body.name}`;
+      case 'stick': return '🪵 Stick · tap to pick up';
       case 'bush': return '🌿 Thick jungle';
       case 'empty': return selectedSeed && S.seeds[selectedSeed] && seedFits(selectedSeed, h.i) ? `Plant ${PLANTS[selectedSeed].name} here!` : isWaterSlot(h.i) ? '🪷 Floating spot' : '🌱 Dirt spot';
       case 'plant': { const d = PLANTS[h.p.id], stars = ' ' + starText(h.p); return h.p.pending ? `${d.emoji} ${d.name} · planting…` : h.p.progress < 1 ? `${d.emoji} ${d.name}${stars} · ${Math.round(h.p.progress * 100)}%` : `${d.emoji} ${d.name}${stars}${d.fruit ? ` · ${h.p.fruit} ${d.fruit.name}${h.p.fruit === 1 ? '' : 's'}` : ' · grown'}`; }
@@ -669,7 +745,7 @@
     return { x: x - 26, y: by - 40, w: 52, h: 50 };
   }
   function drawHover(h, t) {
-    if (h.type === 'falls' || h.type === 'cave') return;
+    if (h.type === 'falls' || h.type === 'cave' || h.type === 'dam') return;
     // the glow itself is painted under the entity while it is drawn; this adds a name tag where there is none
     if (h.type === 'lake' || h.type === 'person' || (h.type === 'animal' && h.a.named)) return;
     const bb = hoverBox(h);
@@ -704,6 +780,8 @@
     $('clockBar').style.width = (phase() / WORLD.CYCLE * 100) + '%';
     $('weather').textContent = S.rain.on ? '🌧️' : (isNight() ? '🌙' : '☀️');
     $('lakeLabel').textContent = '💧 ' + Math.round(S.lake * 100) + '%';
+    const showWood = S.wood > 0 || S.sticks.length > 0 || S.animals.some(a => a.sp === 'beaver');
+    $('woodLabel').style.display = showWood && S.dam.stage < 4 ? '' : 'none'; $('woodLabel').textContent = `🪵 ${S.wood}/${damCost()}`;
     $('btnSound').textContent = S.muted ? '🔇' : '🔊';
   }
   function renderSeedBar() {
@@ -841,7 +919,7 @@
     const c = el('button', 'big', 'Close'); c.onclick = closeSheet; card.appendChild(c);
     openSheet(card, true);
   }
-  function slotName(i) { return isWaterSlot(i) ? `Lake spot ${i - WORLD.MAX_SLOTS + 1}` : `Spot ${i + 1}`; }
+  function slotName(i) { return isWaterSlot(i) ? `Lake spot ${i - WATER0 + 1}` : isIslandSlot(i) ? `Island spot ${i - ISLAND0 + 1}` : `Spot ${i + 1}`; }
   function showPlantsSheet() {
     const card = el('div', 'card'); card.appendChild(el('h2', null, '🌱 My Plants'));
     const list = []; S.plants.forEach((p, i) => { if (p) list.push({ p, i }); });
@@ -933,6 +1011,8 @@
       <li>🌿 <b>Tap the thick jungle</b> to clear a new spot for ${CLEAR_COST} seeds. A new friend also clears ${RULES.slots.perNewcomer} spots every sunrise (up to ${RULES.people.max} friends).</li>
       <li>🦉 Some animals only come out at night. Day animals sleep.</li>
       <li>✏️ <b>Tap any person or animal</b> to name it and give it colors and a hat. The <b>sun and moon</b> too!</li>
+      <li>⏸️ The pause button stops time. The game also pauses by itself when you switch apps.</li>
+      <li>🦫 When the beaver arrives, grown trees drop sticks. <b>Tap sticks</b> (or let the beaver fetch them) and it builds a dam in 3 stages, then an island with 2 new planting spots. A full lake spills over the dam!</li>
       <li>🐸 Frogs hop onto the lily pads under the waterfall. Bats sleep in the cave by day, and the bear sleeps there at night.</li>
       <li>↩️ The small ↩️ button on a name card puts the look back to how it started.</li>
       <li>👆 Swipe, or use ◀ ▶ to look around and ➕ ➖ to zoom. Pinch works too!</li>
@@ -976,6 +1056,8 @@
     sec('🧑 People', [
       `Start with 1 explorer; one more arrives at each sunrise until ${R.people.max}. Newcomer walks in from the left, clears ${R.slots.perNewcomer} spots and asks for a name and look.`,
       `The sun and moon can be named and dressed up like anyone else; their sheet also has a button that jumps time to the next sunset or sunrise.`,
+      `Beaver: arrives at lake ≥ 70% with 3 grown trees. While it is around and the dam is unfinished, a grown land tree drops a stick every ${R.beaver.stickEvery}s (max ${R.beaver.maxSticks} lying about). Tapping a stick or the beaver fetching it adds 1 wood. Each dam stage costs ${R.beaver.sticksPerStage} wood and takes ${R.beaver.buildTime}s to build; the lake floor becomes ${R.beaver.floorByStage.map(pct).join(' → ')} by stage. The island costs ${R.beaver.islandSticks} wood and opens ${WORLD.ISLAND_SLOTS.length} land planting spots in the lake. With any dam built, a lake above ${pct(R.beaver.spillAt)} spills over the dam.`,
+      `Lake animals keep to zones (fractions of the open water, shore 0 → falls 1): ${Object.values(ANIMALS).filter(a => a.zone).map(a => `${a.name} ${a.zone.join('–')}`).join(', ')}. The otter rides the waterfall down 45% of the time it gets bored. Bugs pick lilies only 30% of the time.`,
       `Idle people wander by day and sleep standing at night (they still get up for planting tasks). Queued tasks go to the closest person with nothing to do.`,
     ]);
     sec('🐒 Animals', [
@@ -1021,12 +1103,12 @@
   // ---------- main loop ----------
   function updateHover() {
     const h = (mouse.active && !ptr && !pinch && S.started && !sheetOpen) ? (() => { const w = toWorld(mouse.sx, mouse.sy); return hitTest(w.x, w.y); })() : null;
-    hover = h; const cur = h && h.type !== 'lake' && h.type !== 'falls' && h.type !== 'cave' ? 'pointer' : '';
+    hover = h; const cur = h && h.type !== 'lake' && h.type !== 'falls' && h.type !== 'cave' && h.type !== 'dam' ? 'pointer' : '';
     if (canvas.style.cursor !== cur) canvas.style.cursor = cur;
   }
   function frame(now) {
     const dt = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now;
-    if (S.started && !sheetOpen) update(dt);
+    if (S.started && !sheetOpen && !paused) update(dt);
     updateEffects(dt); updateCamera(dt); updateHover();
     hudT += dt; if (hudT > 0.25) { hudT = 0; updateHud(); }
     draw();
@@ -1048,5 +1130,5 @@
   }
   init();
   // Debug helpers (open the browser console): JP.skip(60) fast-forwards 60 seconds of game time.
-  window.JP = { state: () => S, cam, focusSlot, hitTest, hover: () => hover, dev: showDevSheet, spawn, step: (dt = 1 / 60) => { updateEffects(dt); updateCamera(dt); draw(); }, toScreen: (x, y) => ({ x: (x - cam.x) * cam.scale, y: y * cam.scale + cam.offY }), skip: sec => { for (let i = 0; i < sec * 10; i++) update(0.1); renderSeedBar(); updateHud(); }, save, give: (k, n = 5) => { S.seeds[k] = (S.seeds[k] || 0) + n; if (!S.unlocked.includes(k)) S.unlocked.push(k); renderSeedBar(); } };
+  window.JP = { state: () => S, cam, focusSlot, hitTest, hover: () => hover, dev: showDevSheet, spawn, pause: setPaused, step: (dt = 1 / 60) => { updateEffects(dt); updateCamera(dt); draw(); }, toScreen: (x, y) => ({ x: (x - cam.x) * cam.scale, y: y * cam.scale + cam.offY }), skip: sec => { for (let i = 0; i < sec * 10; i++) update(0.1); renderSeedBar(); updateHud(); }, save, give: (k, n = 5) => { S.seeds[k] = (S.seeds[k] || 0) + n; if (!S.unlocked.includes(k)) S.unlocked.push(k); renderSeedBar(); } };
 })();

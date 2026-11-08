@@ -13,10 +13,10 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 
 ## World and time
 
-- The world is 1660 × 560 units. Ground is at y = 430. A cave sits at x = 85 on the left. The lake basin starts at x = 1330 and ends at a waterfall cliff at x = 1618.
+- The world is 1780 × 560 units. Ground is at y = 430. A cave sits at x = 85 on the left. The lake basin starts at x = 1330 and ends at a waterfall cliff at x = 1738. The beaver's dam goes at x = 1690 and its island at x = 1630 (two land spots at x = 1612 and 1650, y = 422).
 - 16 land planting spots sit every 72 units from x = 200. Three floating lake spots at x = 1420, 1495, 1570 take water plants only. Three decorative lily pads float at x = 1380, 1458, 1532.
 - A day is 180 s of daylight plus 90 s of night (270 s). A new jungle starts 25 s into Day 1. The day number is `floor(t / 270) + 1`; when it changes, sunrise happens.
-- Game time only advances while the page is open and no sheet is showing. There is no offline growth.
+- Game time only advances while the page is open, no sheet is showing and the game is not paused. The ⏸️ button pauses; switching apps or tabs pauses automatically. There is no offline growth.
 - Autosave every 5 s and whenever the tab hides, to `localStorage` under `junglePlanting.save.v1` (save format version 2, with migration from version 1).
 
 ## Customizing
@@ -77,7 +77,8 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 - **climber** sits in a canopy (the tree frog sits lower on the trunk).
 - **bug** hovers at flowers and lilies.
 - **ground** walks in from the left along the ground. Capybara and frog prefer the lake shore. The frog hops (55% of the time it picks a target) onto a lily pad or a grown water lily and sits there at the water line.
-- **lake** swims in the lake, fish at a random depth.
+- **lake** swims in the lake, fish at a random depth. Each lake species keeps to a zone of the open water (0 = shore, 1 = falls): turtle 0 to 0.3, duck 0.15 to 0.6, crocodile 0.55 to 0.85, otter 0.85 to 1, fish anywhere. When the otter gets bored it rides the waterfall down into the plunge pool 45% of the time.
+- **bug** picks a lily only 30% of the time so the pond does not fill with bees and butterflies.
 - **glow** is the fireflies, which appear at a flower.
 - Picking a target: with a gift ready (or half the time anyway) an eater heads for a plant with fruit it likes. Otherwise a random plant of its kind, avoiding the one it is already on. Idle time between moves is 6 to 14 s (3 to 14 s for bugs).
 
@@ -99,6 +100,14 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 ### Sounds
 
 - Each species may have a `sound`. Every 4 to 9 s one awake animal with a sound calls, 70% of the time; otherwise a generic chirp by day.
+
+## Beaver, sticks, dam and island
+
+- The beaver arrives when the lake is at least 70% full and 3 trees are grown. It is awake day and night, keeps near the lake, swims, eats bamboo and brings bamboo and nut seeds.
+- While the beaver is present and the dam is unfinished, a random grown land tree drops a stick every 40 s, up to 4 lying around. Tapping a stick collects it; the beaver also walks over and fetches sticks on its own. Collected sticks are "wood", shown in the 🪵 HUD pill as have/need.
+- With enough wood the beaver swims to the dam site and builds for 3 s. Stages 1 to 3 cost 4 wood each and raise the lake floor to 30%, 40% and 50%, so the lake can never drain below that. Stage 4 costs 6 wood and builds the island, which opens 2 land planting spots in the lake. People plant them from the shore like lilies. Birds and bugs visit island plants; ground animals and climbers do not.
+- Once any dam stage exists, a lake above 97% spills over the dam as a small second waterfall with foam.
+- Tapping the dam says how far along it is and how much wood is needed.
 
 ## Seed economy at a glance
 

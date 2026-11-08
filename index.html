@@ -17,6 +17,7 @@
       <div id="dayLabel" class="pill">Day 1</div>
       <div class="pill clock"><span id="weather">☀️</span><div class="bar"><div id="clockBar"></div></div></div>
       <div id="lakeLabel" class="pill">💧 50%</div>
+      <div id="woodLabel" class="pill" style="display:none" title="Sticks for the beaver">🪵 0</div>
     </div>
     <div class="hud-right">
       <button id="btnPlants" class="hudbtn" title="My Plants">🌱</button>
@@ -33,7 +34,10 @@
   <div id="zoomctrls">
     <button id="btnZoomIn" class="hudbtn" title="Zoom in">➕</button>
     <button id="btnZoomOut" class="hudbtn" title="Zoom out">➖</button>
+    <button id="btnPause" class="hudbtn" title="Pause">⏸️</button>
   </div>
+
+  <div id="pauseOverlay" class="hidden"><div class="pausecard"><div class="pausetitle">⏸️ Paused</div><button id="btnResume" class="big primary">▶️ Keep playing</button></div></div>
 
   <div id="toasts"></div>
   <div id="seedbar"></div>

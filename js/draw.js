@@ -196,6 +196,36 @@ const Draw = (() => {
     for (let k = 0; k < 4; k++) { const sx = cx - 26 + k * 17; poly(ctx, [[sx - 5, gy - 84 + k % 2 * 3], [sx + 5, gy - 84 + k % 2 * 3], [sx, gy - 70 - (k % 2) * 6]], '#3b2d22'); }
     ell(ctx, cx - 36, gy + 2, 9, 5, '#6b5a48'); ell(ctx, cx + 48, gy + 3, 11, 6, '#4a3b2d'); ell(ctx, cx + 30, gy + 4, 6, 3.5, '#6b5a48');
   }
+  // --- beaver things: sticks on the ground, the dam, the island ---
+  function drawStick(ctx, x, y, r, t) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(r);
+    rrect(ctx, -11, -3, 22, 6, 3, '#8a5a2b'); rrect(ctx, -9, -2, 18, 2, 1, '#a9743d'); line(ctx, 4, -3, 9, -8, '#8a5a2b', 2.5);
+    ctx.restore();
+    ctx.globalAlpha = 0.5 + 0.5 * Math.sin(t * 4); circ(ctx, x + 10, y - 10, 2, '#fff'); ctx.globalAlpha = 1;
+  }
+  function drawDam(ctx, stage, level, t, spill) {
+    if (!stage) return;
+    const gy = WORLD.GROUND_Y, dx = WORLD.DAM_X, floor = gy + 75, wy = waterY(level);
+    const h = [0, 34, 58, 86, 86][Math.min(stage, 4)], top = floor - h;
+    rrect(ctx, dx - 16, top, 32, h, 6, '#6b4320');
+    for (let k = 0; k < Math.floor(h / 9); k++) { const y = floor - 6 - k * 9, off = (k % 2) * 5; rrect(ctx, dx - 15 + off, y - 3, 28 - off * 2, 6, 3, k % 2 ? '#8a5a2b' : '#a9743d'); circ(ctx, dx - 14 + off, y, 2.5, '#d9b48a'); circ(ctx, dx + 13 - off, y, 2.5, '#d9b48a'); }
+    if (stage >= 3) { circ(ctx, dx - 10, top - 4, 6, '#3f8f3a'); circ(ctx, dx + 8, top - 5, 7, '#2e8b3a'); }
+    if (spill > 0 && wy < top + 6) {
+      // water pouring over the dam
+      ctx.globalAlpha = 0.8 * spill; rect(ctx, dx + 14, top - 4, 10, Math.max(8, floor - top) , '#9fd8f5'); ctx.globalAlpha = 1;
+      ctx.strokeStyle = `rgba(255,255,255,${0.8 * spill})`; ctx.lineWidth = 2;
+      for (let k = 0; k < 3; k++) { const off = (t * 150 + k * 29) % (floor - top); ctx.beginPath(); ctx.moveTo(dx + 16 + k * 3, top + off - 4); ctx.lineTo(dx + 16 + k * 3, Math.min(floor, top + off + 14)); ctx.stroke(); }
+      for (let k = 0; k < 4; k++) { ctx.globalAlpha = spill * (0.4 + 0.3 * Math.sin(t * 5 + k)); circ(ctx, dx + 12 + k * 6, top - 2 - Math.abs(Math.sin(t * 3 + k)) * 6, 4, '#eaf7ff'); }
+      ctx.globalAlpha = 1;
+    }
+  }
+  function drawIsland(ctx, built, t) {
+    if (!built) return;
+    const x = WORLD.ISLAND_X, y = WORLD.ISLAND_Y;
+    ell(ctx, x, y + 14, 58, 22, '#a68556'); ell(ctx, x, y + 4, 52, 12, '#c9a46a'); ell(ctx, x, y + 1, 46, 7, '#56b04a');
+    for (let k = -3; k <= 3; k++) { const gx = x + k * 13; line(ctx, gx, y + 2, gx - 2, y - 6 - (k % 2) * 3, '#4aa040', 2); }
+    ell(ctx, x - 44, y + 6, 7, 4, '#6b5a48'); ell(ctx, x + 46, y + 8, 6, 3.5, '#6b5a48');
+  }
   // --- waterfall at the right end of the lake ---
   function drawCliff(ctx) {
     const gy = WORLD.GROUND_Y, fx = WORLD.FALLS_X, top = gy - 170;
@@ -702,6 +732,18 @@ const Draw = (() => {
     eye(ctx, 12, -35, 2, o.closed); eye(ctx, 19, -35, 2, o.closed);
     return { hx: 16, hy: -33, hr: 11 };
   };
+  C.beaver = (ctx, o) => {
+    const { c1, c2 } = o; const w = o.moving ? Math.sin(o.t * 9) * 2 : 0;
+    ell(ctx, -22, -4, 12, 5, c2, 0.15 + Math.sin(o.t * 3) * 0.1); // flat tail
+    line(ctx, -22, -4, -14, -4, c2, 1);
+    rrect(ctx, -10 + w, -10, 7, 11, 3, shade(c1, -20)); rrect(ctx, 3 - w, -10, 7, 11, 3, shade(c1, -20));
+    ell(ctx, -2, -17, 16, 11, c1);
+    circ(ctx, 12, -26, 9, c1); circ(ctx, 8, -34, 3.5, c1); circ(ctx, 16, -34, 3.5, c1);
+    ell(ctx, 17, -23, 5, 3.5, shade(c1, 30)); circ(ctx, 20, -25, 2, '#222');
+    rect(ctx, 16, -21, 2, 4, '#fff'); rect(ctx, 18.5, -21, 2, 4, '#fff'); // buck teeth
+    eye(ctx, 10, -28, 1.8, o.closed); eye(ctx, 15, -28, 1.8, o.closed);
+    return { hx: 12, hy: -26, hr: 9 };
+  };
   C.bat = (ctx, o) => {
     const { c1, c2 } = o; const f = o.moving ? Math.sin(o.t * 18) * 8 : 4;
     poly(ctx, [[-4, -16], [-16, -22 - f], [-28, -14 - f], [-22, -10], [-16, -14], [-10, -8]], c1);
@@ -838,5 +880,5 @@ const Draw = (() => {
     ctx.fillStyle = '#fff'; ctx.fillText(text, x, y);
   }
 
-  return { ell, circ, rect, rrect, line, poly, eye, smile, shade, lerpColor, seeded, nightFactor, drawSky, drawStars, drawSunMoon, drawClouds, drawFarJungle, drawGround, drawBush, drawMound, drawCave, drawCliff, drawFalls, drawLilyPad, drawPlantButton, sunMoonPos, drawSunMoonAt, waterY, drawLakeBasin, drawWater, drawWaterFront, plantMetrics, drawPlant, drawWaterSpot, levelScale, star, drawLevelStars, drawAccessory, drawPerson, drawCritter, drawFireflies, drawZzz, drawLabel };
+  return { ell, circ, rect, rrect, line, poly, eye, smile, shade, lerpColor, seeded, nightFactor, drawSky, drawStars, drawSunMoon, drawClouds, drawFarJungle, drawGround, drawBush, drawMound, drawCave, drawCliff, drawFalls, drawStick, drawDam, drawIsland, drawLilyPad, drawPlantButton, sunMoonPos, drawSunMoonAt, waterY, drawLakeBasin, drawWater, drawWaterFront, plantMetrics, drawPlant, drawWaterSpot, levelScale, star, drawLevelStars, drawAccessory, drawPerson, drawCritter, drawFireflies, drawZzz, drawLabel };
 })();
