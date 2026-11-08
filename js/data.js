@@ -2,12 +2,13 @@
 // Everything about plants, animals, colors and accessories lives here so it's easy to tweak.
 
 const WORLD = {
-  W: 1520, H: 560, GROUND_Y: 430,
-  LAKE_X: 1190,           // where the lake basin starts
-  SLOT_X0: 60, SLOT_DX: 72, MAX_SLOTS: 16, // 16 spots, 72 apart so neighbouring trees overlap less
-  LAKE_SLOTS: [1280, 1355, 1430], // x positions of the floating water-plant spots
-  LILY_PADS: [1240, 1318, 1392],  // decorative pads frogs hop onto
-  FALLS_X: 1478,          // the waterfall cliff starts here
+  W: 1660, H: 560, GROUND_Y: 430,
+  CAVE_X: 85,             // the cave on the left; bats sleep in it by day, the bear at night
+  LAKE_X: 1330,           // where the lake basin starts
+  SLOT_X0: 200, SLOT_DX: 72, MAX_SLOTS: 16, // 16 spots, 72 apart so neighbouring trees overlap less
+  LAKE_SLOTS: [1420, 1495, 1570], // x positions of the floating water-plant spots
+  LILY_PADS: [1380, 1458, 1532],  // decorative pads frogs hop onto
+  FALLS_X: 1618,          // the waterfall cliff starts here
   DAY: 180, NIGHT: 90,    // seconds (3 minute day, 1.5 minute night)
 };
 WORLD.CYCLE = WORLD.DAY + WORLD.NIGHT;
@@ -47,7 +48,7 @@ const PLANTS = {
 };
 
 // Animals. kind: bird (flies, perches on tree tops) | climber (sits in canopy) | bug (hovers at flowers)
-// ground (walks) | lake (swims) | glow (fireflies). active: day | night | both.
+// ground (walks) | lake (swims) | glow (fireflies). active: day | night | both. home: 'cave' = sleeps in the cave when off duty.
 // req(s): when it may come. eats: fruit of these plants. brings: seeds it may drop. gift: seconds between gifts.
 const ANIMALS = {
   parrot:      { name: 'Parrot',      kind: 'bird',    active: 'day',   max: 1, speed: 140, hint: 'Loves mango and palm trees',               req: s => s.grown('mango') + s.grown('palm') >= 1, eats: ['mango', 'papaya', 'palm'], brings: ['cacao', 'mango'], gift: 64, sound: 'chirp', c1: '#ff3b3b', c2: '#2f6bff' },
@@ -61,8 +62,9 @@ const ANIMALS = {
   tapir:       { name: 'Tapir',       kind: 'ground',  active: 'day',   max: 1, speed: 45,  hint: 'Comes when 5 trees are grown',             req: s => s.trees >= 5, eats: ['fig', 'mango', 'papaya'], brings: ['fig'], gift: 80, c1: '#3a3a3a', c2: '#e8e8e8' },
   elephant:    { name: 'Elephant',    kind: 'ground',  active: 'day',   max: 1, speed: 35,  hint: 'Very rare! Needs 11 grown trees',          req: s => s.trees >= 11, eats: ['banana', 'mango', 'fig', 'papaya', 'nut'], brings: ['golden'], gift: 96, chance: 0.07, sound: 'trumpet', c1: '#8d8d9a', c2: '#c9b3c9' },
   gorilla:     { name: 'Gorilla',     kind: 'ground',  active: 'day',   max: 1, speed: 50,  hint: 'Needs 7 grown trees and bananas',          req: s => s.trees >= 7 && s.grown('banana') >= 1, eats: ['banana', 'bamboo', 'berry'], brings: ['bamboo', 'banana'], gift: 72, sound: 'ooh', c1: '#2b2b2b', c2: '#6d6d6d' },
+  bear:        { name: 'Bear',        kind: 'ground',  active: 'day',   max: 1, speed: 45, hint: 'Lives in the cave. Comes when berries and 4 trees are grown', req: s => s.grown('berry') >= 1 && s.trees >= 4, eats: ['berry', 'fig', 'nut'], brings: ['berry', 'nut'], gift: 80, home: 'cave', sound: 'growl', c1: '#6b4a2b', c2: '#c9a27a' },
   owl:         { name: 'Owl',         kind: 'bird',    active: 'night', max: 1, speed: 110, hint: 'Hoots at night once 5 trees are grown',    req: s => s.trees >= 5, eats: [], brings: ['moonflower'], gift: 96, sound: 'hoot', c1: '#a0714f', c2: '#e9d8b8' },
-  bat:         { name: 'Bat',         kind: 'bird',    active: 'night', max: 1, speed: 170, hint: 'Flies at night once 5 fruit trees are grown', req: s => s.fruitTrees >= 5, eats: ['fig', 'mango', 'papaya', 'banana'], brings: ['fig'], gift: 72, c1: '#3b2d4a', c2: '#8a6aa8' },
+  bat:         { name: 'Bat',         kind: 'bird',    active: 'night', max: 1, speed: 170, hint: 'Flies at night once 5 fruit trees are grown; sleeps in the cave', req: s => s.fruitTrees >= 5, eats: ['fig', 'mango', 'papaya', 'banana'], brings: ['fig'], gift: 72, home: 'cave', c1: '#3b2d4a', c2: '#8a6aa8' },
   fireflies:   { name: 'Fireflies',   kind: 'glow',    active: 'night', max: 1, speed: 30,  hint: 'Glow at night near flowers',               req: s => s.flowers >= 1, eats: [], brings: [], gift: 0, c1: '#d8ff5a', c2: '#ffffff' },
   jaguar:      { name: 'Jaguar',      kind: 'ground',  active: 'night', max: 1, speed: 70,  hint: 'Rare! Prowls at night with 9 trees grown', req: s => s.trees >= 9, eats: [], brings: ['orchid'], gift: 112, chance: 0.1, c1: '#e0a53a', c2: '#2a2a2a' },
   treefrog:    { name: 'Tree Frog',   kind: 'climber', active: 'night', max: 1, speed: 60,  hint: 'Sits in trees at night once 4 trees are grown', req: s => s.trees >= 4, eats: [], brings: [], gift: 0, sound: 'croak', c1: '#4fd14a', c2: '#ff5a3a' },

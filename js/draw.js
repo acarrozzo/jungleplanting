@@ -179,6 +179,23 @@ const Draw = (() => {
     circ(ctx, x - 14, gy - 10, 16, '#245c2c'); circ(ctx, x + 12, gy - 12, 18, '#2b6b34'); circ(ctx, x, gy - 4, 14, '#1e4d26');
   }
 
+  // --- the cave on the left ---
+  function drawCave(ctx, t) {
+    const gy = WORLD.GROUND_Y, cx = WORLD.CAVE_X;
+    // rocky hill
+    ell(ctx, cx - 20, gy + 6, 150, 130, '#5a4a3a'); ell(ctx, cx + 40, gy + 6, 95, 95, '#655241');
+    ell(ctx, cx - 60, gy - 30, 40, 30, '#6b5a48'); ell(ctx, cx + 70, gy - 20, 30, 22, '#4a3b2d');
+    // moss and plants on top
+    circ(ctx, cx - 50, gy - 112, 22, '#2e8b3a'); circ(ctx, cx - 10, gy - 126, 26, '#3f8f3a'); circ(ctx, cx + 35, gy - 108, 20, '#2e8b3a'); circ(ctx, cx + 75, gy - 84, 16, '#3f8f3a');
+    fern(ctx, cx - 80, gy - 60, 18, '#2a6f38', 71); fern(ctx, cx + 95, gy - 36, 16, '#2a6f38', 72);
+    vine(ctx, cx - 30, gy - 100, 50, 3); vine(ctx, cx + 22, gy - 96, 36, 5);
+    // opening
+    ctx.beginPath(); ctx.moveTo(cx - 42, gy + 2); ctx.lineTo(cx - 42, gy - 40); ctx.quadraticCurveTo(cx - 40, gy - 86, cx, gy - 88); ctx.quadraticCurveTo(cx + 40, gy - 86, cx + 42, gy - 40); ctx.lineTo(cx + 42, gy + 2); ctx.closePath();
+    const g = ctx.createLinearGradient(0, gy - 88, 0, gy); g.addColorStop(0, '#120c08'); g.addColorStop(1, '#2a1c12'); ctx.fillStyle = g; ctx.fill();
+    // stalactites and a few rocks
+    for (let k = 0; k < 4; k++) { const sx = cx - 26 + k * 17; poly(ctx, [[sx - 5, gy - 84 + k % 2 * 3], [sx + 5, gy - 84 + k % 2 * 3], [sx, gy - 70 - (k % 2) * 6]], '#3b2d22'); }
+    ell(ctx, cx - 36, gy + 2, 9, 5, '#6b5a48'); ell(ctx, cx + 48, gy + 3, 11, 6, '#4a3b2d'); ell(ctx, cx + 30, gy + 4, 6, 3.5, '#6b5a48');
+  }
   // --- waterfall at the right end of the lake ---
   function drawCliff(ctx) {
     const gy = WORLD.GROUND_Y, fx = WORLD.FALLS_X, top = gy - 170;
@@ -450,7 +467,8 @@ const Draw = (() => {
     }
     ctx.restore();
     // level stars under every sprouted plant: gold = current level, faint = levels still to earn
-    if (!plant.pending && pr >= RULES.growth.sproutAt) drawLevelStars(ctx, x, baseY + (water ? 10 : 14), plant.level || 1, t);
+    if (!plant.pending && pr < 1) drawGrowBar(ctx, x, baseY + (water ? 10 : 14), pr, t);
+    else if (!plant.pending) drawLevelStars(ctx, x, baseY + (water ? 10 : 14), plant.level || 1, t);
     return m;
   }
 
@@ -460,6 +478,15 @@ const Draw = (() => {
     for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.45 : r; ctx.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); }
     ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
     if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.lineJoin = 'round'; ctx.stroke(); }
+  }
+  // little progress bar under a growing plant
+  function drawGrowBar(ctx, x, y, pr, t) {
+    const w = 34, h = 6;
+    ctx.globalAlpha = 0.45; rrect(ctx, x - w / 2 - 1, y - h / 2 - 1, w + 2, h + 2, 4, '#1b2a1d'); ctx.globalAlpha = 1;
+    rrect(ctx, x - w / 2, y - h / 2, w, h, 3, '#d7e4d2');
+    const fw = Math.max(h, w * pr);
+    rrect(ctx, x - w / 2, y - h / 2, fw, h, 3, pr < 0.5 ? '#9ad66a' : '#56b04a');
+    ctx.globalAlpha = 0.6 + 0.4 * Math.sin(t * 4); circ(ctx, x - w / 2 + fw - 2, y, 2, '#fff'); ctx.globalAlpha = 1;
   }
   function drawLevelStars(ctx, x, y, level, t) {
     const n = RULES.upgrade.maxLevel, gap = 12;
@@ -663,6 +690,18 @@ const Draw = (() => {
     line(ctx, -3, -3, -3, 0, '#f3c04a', 2); line(ctx, 3, -3, 3, 0, '#f3c04a', 2);
     return { hx: 0, hy: -33, hr: 12 };
   };
+  C.bear = (ctx, o) => {
+    const { c1, c2 } = o; const w = o.moving ? Math.sin(o.t * 8) * 3 : 0, dark = shade(c1, -25);
+    rrect(ctx, -18 + w, -13, 8, 14, 3, dark); rrect(ctx, 6 - w, -13, 8, 14, 3, dark);
+    ell(ctx, -3, -24, 22, 14, c1);
+    rrect(ctx, -10 - w, -13, 8, 14, 3, c1); rrect(ctx, 0 + w, -13, 8, 14, 3, c1);
+    circ(ctx, -24, -26, 4, c1);
+    circ(ctx, 10, -42, 4.5, c1); circ(ctx, 22, -42, 4.5, c1); circ(ctx, 10, -42, 2.2, c2); circ(ctx, 22, -42, 2.2, c2);
+    circ(ctx, 16, -33, 11, c1);
+    ell(ctx, 20, -29, 6.5, 4.5, c2); circ(ctx, 23, -31, 2.4, '#222');
+    eye(ctx, 12, -35, 2, o.closed); eye(ctx, 19, -35, 2, o.closed);
+    return { hx: 16, hy: -33, hr: 11 };
+  };
   C.bat = (ctx, o) => {
     const { c1, c2 } = o; const f = o.moving ? Math.sin(o.t * 18) * 8 : 4;
     poly(ctx, [[-4, -16], [-16, -22 - f], [-28, -14 - f], [-22, -10], [-16, -14], [-10, -8]], c1);
@@ -799,5 +838,5 @@ const Draw = (() => {
     ctx.fillStyle = '#fff'; ctx.fillText(text, x, y);
   }
 
-  return { ell, circ, rect, rrect, line, poly, eye, smile, shade, lerpColor, seeded, nightFactor, drawSky, drawStars, drawSunMoon, drawClouds, drawFarJungle, drawGround, drawBush, drawMound, drawCliff, drawFalls, drawLilyPad, drawPlantButton, sunMoonPos, drawSunMoonAt, waterY, drawLakeBasin, drawWater, drawWaterFront, plantMetrics, drawPlant, drawWaterSpot, levelScale, star, drawLevelStars, drawAccessory, drawPerson, drawCritter, drawFireflies, drawZzz, drawLabel };
+  return { ell, circ, rect, rrect, line, poly, eye, smile, shade, lerpColor, seeded, nightFactor, drawSky, drawStars, drawSunMoon, drawClouds, drawFarJungle, drawGround, drawBush, drawMound, drawCave, drawCliff, drawFalls, drawLilyPad, drawPlantButton, sunMoonPos, drawSunMoonAt, waterY, drawLakeBasin, drawWater, drawWaterFront, plantMetrics, drawPlant, drawWaterSpot, levelScale, star, drawLevelStars, drawAccessory, drawPerson, drawCritter, drawFireflies, drawZzz, drawLabel };
 })();

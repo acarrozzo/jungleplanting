@@ -45,6 +45,7 @@ const Sound = (() => {
     plant:   () => { tone(200, 0.1, 'triangle', 0.25, 120); noise(0.12, 0.12, 600); },
     chime:   () => { tone(523, 0.25, 'sine', 0.25); tone(659, 0.25, 'sine', 0.25, 0, 0.12); tone(784, 0.4, 'sine', 0.25, 0, 0.24); },
     fanfare: () => { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.3, 'triangle', 0.22, 0, i * 0.11)); },
+    growl:   () => { tone(120, 0.35, 'sawtooth', 0.07, -30); tone(100, 0.3, 'sawtooth', 0.07, -20, 0.22); },
     chirp:   () => { tone(1900, 0.07, 'sine', 0.1, 900); tone(2300, 0.07, 'sine', 0.1, 700, 0.1); },
     hoot:    () => { tone(420, 0.25, 'sine', 0.18, -60); tone(400, 0.3, 'sine', 0.18, -60, 0.3); },
     croak:   () => tone(140, 0.18, 'sawtooth', 0.08, -40),

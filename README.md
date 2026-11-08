@@ -16,13 +16,14 @@ then visit http://localhost:8787 (on a phone on the same wifi, use the computer'
 
 - Tap a dirt spot and pick a seed. One of your people walks over and plants it.
 - Water lilies grow on the three floating spots in the lake. A waterfall feeds the lake at the far right, and frogs hop onto the lily pads.
-- Empty spots show a round + button. Tap it to plant there.
+- Empty spots show a round + button. Tap it to plant there. Growing plants show a progress bar underneath, grown plants show their level stars.
+- A cave on the left: bats sleep in it by day and a bear sleeps in it at night.
 - Days are 3 minutes, nights 1.5 minutes. Plants grow slower at night and faster in the rain. Rain also fills the lake.
 - Grown trees make fruit. Animals come to eat it and bring you seeds, including new kinds. Every new animal brings a welcome seed soon after it arrives.
 - The first animals come for the starter trees and flowers. Bigger ones (sloth, tapir, owl, gorilla, jaguar, elephant) need more grown trees. The Jungle Book shows what each one is waiting for.
 - Tap a grown plant to make it bigger with spare seeds (up to level 3) or swap it for a new seed.
 - Tap the thick jungle to clear a new spot for 3 seeds. A new friend also arrives every sunrise (up to 5) and clears 2 spots.
-- Tap any person or animal to rename it and pick colors and a hat. The sun and moon can be dressed up too, and their sheet can call the next sunset or sunrise early.
+- Tap any person or animal to rename it and pick colors and a hat. The ↩️ button on a name card restores the original look. The sun and moon can be dressed up too, and their sheet can call the next sunset or sunrise early.
 - The 🌱 button lists every plant you own with its growth, fruit, level and spot. Tap 👀 to jump to it.
 - Land seeds and lake seeds sit on their own sides of the seed bar.
 - On a computer, point at anything and it glows softly with its name, handy when animals and plants overlap.

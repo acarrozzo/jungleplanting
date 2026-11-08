@@ -126,7 +126,9 @@
 
   // ---------- people ----------
   function makePerson(name, x) {
-    return { id: nextId(), name, skin: pick(SKIN_COLORS), shirt: pick(PEOPLE_COLORS), pants: pick(PEOPLE_COLORS), hair: pick(HAIR_COLORS), acc: 'none', x, y: GY, face: 1, task: null, idle: rand(1, 3), anim: 0, moving: false, planting: false };
+    const pe = { id: nextId(), name, skin: pick(SKIN_COLORS), shirt: pick(PEOPLE_COLORS), pants: pick(PEOPLE_COLORS), hair: pick(HAIR_COLORS), acc: 'none', x, y: GY, face: 1, task: null, idle: rand(1, 3), anim: 0, moving: false, planting: false };
+    pe.def = { name, skin: pe.skin, shirt: pe.shirt, pants: pe.pants, hair: pe.hair, acc: 'none' };
+    return pe;
   }
   function updatePerson(pe, dt, night) {
     pe.anim += dt; pe.moving = false;
@@ -147,7 +149,7 @@
       }
     } else if (!night) {
       pe.idle -= dt;
-      if (pe.idle <= 0) pe.task = { type: 'walk', tx: rand(40, WORLD.LAKE_X - 60) };
+      if (pe.idle <= 0) pe.task = { type: 'walk', tx: rand(WORLD.SLOT_X0 - 30, WORLD.LAKE_X - 60) };
     }
   }
   function assignTasks() {
@@ -201,7 +203,7 @@
     if (S.people.length < RULES.people.max) {
       const used = S.people.map(p => p.name);
       const pe = makePerson(pick(PERSON_NAMES.filter(n => !used.includes(n))) || 'Friend', -50);
-      pe.task = { type: 'arrive', tx: rand(140, 320) };
+      pe.task = { type: 'arrive', tx: rand(WORLD.SLOT_X0 + 60, WORLD.SLOT_X0 + 260) };
       S.people.push(pe);
     }
   }
@@ -215,6 +217,7 @@
   function placeOffscreen(a) {
     const sp = ANIMALS[a.sp];
     const left = Math.random() < 0.5;
+    if (sp.home === 'cave') { a.x = WORLD.CAVE_X + rand(-15, 15); a.y = sp.kind === 'ground' ? GY : GY - 30; return; }
     switch (sp.kind) {
       case 'bird': case 'bug': case 'climber': a.x = left ? cam.x - 80 : cam.x + cam.viewW + 80; a.y = GY - rand(180, 380); break;
       case 'ground': a.x = -70; a.y = GY; break;
@@ -263,7 +266,7 @@
         if (pads.length) { a.slot = -1; a.pad = pick(pads); a.tx = a.pad; a.ty = Draw.waterY(S.lake) - 1; return; }
       }
       if (sp.nearLake && !(choice && tasty.includes(choice) && Math.random() < 0.6)) { a.slot = -1; a.tx = rand(WORLD.LAKE_X - 170, WORLD.LAKE_X - 30); return; }
-      if (choice) { a.slot = choice.i; a.tx = slotX(choice.i) + (Math.random() < 0.5 ? -26 : 26); } else { a.slot = -1; a.tx = rand(40, WORLD.LAKE_X - 60); }
+      if (choice) { a.slot = choice.i; a.tx = slotX(choice.i) + (Math.random() < 0.5 ? -26 : 26); } else { a.slot = -1; a.tx = rand(WORLD.SLOT_X0 - 30, WORLD.LAKE_X - 60); }
       return;
     }
     if (!choice) { a.slot = -1; a.tx = rand(60, WORLD.LAKE_X - 60); a.ty = GY - rand(160, 340); return; }
@@ -298,6 +301,12 @@
     if (a.slot >= 0 && (!S.plants[a.slot] || S.plants[a.slot].pending) && a.state !== 'away' && a.state !== 'leaving') { a.slot = -1; if (a.state !== 'moving') { chooseTarget(a); a.state = 'moving'; } }
     if (a.state === 'away') { if (active) { a.state = 'arriving'; placeOffscreen(a); chooseTarget(a); if (sp.kind === 'glow') { a.state = 'idle'; a.x = a.tx; a.y = a.ty; } } return; }
     if (!active) {
+      if (sp.home === 'cave') {
+        if (a.state === 'sleep') return;
+        if (a.state !== 'homing') { a.state = 'homing'; a.homeOff = a.homeOff || rand(-16, 16); a.tx = WORLD.CAVE_X + a.homeOff; a.ty = sp.kind === 'ground' ? GY : GY - 2; a.slot = -1; a.pad = null; }
+        if (moveToward(a, dt, sp.speed * 1.3)) { a.state = 'sleep'; if (sp.sound && Math.random() < 0.5) Sound.play(sp.sound); }
+        return;
+      }
       if (sp.active === 'night') {
         if (sp.kind === 'glow') { a.state = 'away'; return; }
         if (a.state !== 'leaving') { a.state = 'leaving'; a.tx = a.x < WORLD.W / 2 ? -100 : WORLD.W + 100; a.ty = sp.kind === 'ground' ? GY : GY - 320; a.slot = -1; }
@@ -309,6 +318,8 @@
     } else if (a.state === 'sleep') { a.state = 'idle'; a.timer = rand(1, 4); }
 
     switch (a.state) {
+      case 'homing': // woke up on the way home: carry on to a new target
+        a.state = 'idle'; a.timer = 0.5; break;
       case 'arriving': case 'moving': {
         if (moveToward(a, dt, sp.speed)) {
           a.state = 'idle'; a.timer = rand(sp.kind === 'bug' ? 3 : 6, 14);
@@ -445,6 +456,7 @@
     Draw.drawClouds(ctx, S.t * 0.6, rainVis);
     Draw.drawFarJungle(ctx);
     Draw.drawGround(ctx);
+    Draw.drawCave(ctx, t);
     Draw.drawLakeBasin(ctx);
     Draw.drawCliff(ctx);
     Draw.drawWater(ctx, S.lake, t);
@@ -495,13 +507,16 @@
   // c = context to draw on (the glow pass uses an offscreen one); plain = critter only, no tag or Zzz
   function drawAnimal(a, t, c = ctx, plain = false) {
     const sp = ANIMALS[a.sp];
-    const moving = a.state === 'moving' || a.state === 'arriving' || a.state === 'leaving';
+    const moving = a.state === 'moving' || a.state === 'arriving' || a.state === 'leaving' || a.state === 'homing';
     let y = a.y;
     if (moving && (sp.kind === 'bird' || sp.kind === 'bug')) y += Math.sin(a.anim * 6) * 3;
     if (!moving && sp.kind === 'bug' && a.state !== 'sleep') y += Math.sin(a.anim * 8) * 2;
     if (a.state === 'eating') y += Math.abs(Math.sin(a.anim * 10)) * -2;
     if (moving && a.sp === 'frog') y -= Math.abs(Math.sin(a.anim * 7)) * 14;
+    const hang = a.sp === 'bat' && a.state === 'sleep';
+    if (hang) { c.save(); c.translate(0, 2 * (y - 40)); c.scale(1, -1); }
     const head = Draw.drawCritter(c, { x: a.x, y, sp: a.sp, acc: a.acc }, { c1: a.c1, c2: a.c2, t: a.anim, moving, closed: a.state === 'sleep', face: a.face, size: 1 });
+    if (hang) c.restore();
     if (plain) return;
     if (head) {
       if (a.state === 'sleep') Draw.drawZzz(c, head.hx + head.hr, head.hy - head.hr, t);
@@ -593,6 +608,7 @@
     for (const a of S.animals) if (a.state !== 'away' && inBB(a.bb)) cands.push({ type: 'animal', a, bb: a.bb, d: Math.hypot(a.bb.x + a.bb.w / 2 - x, a.bb.y + a.bb.h / 2 - y) });
     for (const pe of S.people) if (inBB(pe.bb)) cands.push({ type: 'person', pe, bb: pe.bb, d: Math.hypot(pe.x - x, pe.bb.y + pe.bb.h / 2 - y) });
     if (cands.length) return cands.sort((u, v) => u.d - v.d)[0];
+    if (Math.abs(x - WORLD.CAVE_X) <= 60 && y > GY - 100 && y < GY + 10) return { type: 'cave' };
     const sm = Draw.sunMoonPos(phase());
     if (Math.hypot(x - sm.x, y - sm.y) <= 48) return { type: 'sky', sun: sm.sun, body: sm.sun ? S.sun : S.moon, bb: { x: sm.x - 40, y: sm.y - 40, w: 80, h: 80 } };
     for (let i = 0; i < TOTAL_SLOTS; i++) {
@@ -621,6 +637,7 @@
       case 'plant': if (h.p.pending) toast(`${PLANTS[h.p.id].emoji} A ${PLANTS[h.p.id].name} seed is about to be planted.`); else showPlantSheet(h.i); break;
       case 'sky': showSkySheet(h.sun); break;
       case 'lake': toast(`💧 The lake is ${Math.round(S.lake * 100)}% full. Rain fills it up! Water lilies grow on the floating spots.`); break;
+      case 'cave': { const inside = S.animals.filter(a => ANIMALS[a.sp].home === 'cave' && a.state === 'sleep').map(a => a.name); toast(inside.length ? `🕳️ Shh! ${inside.join(' and ')} ${inside.length > 1 ? 'are' : 'is'} sleeping in the cave.` : '🕳️ The cave. Bats sleep here by day and the bear sleeps here at night.'); break; }
       case 'falls': Sound.play('splash'); toast('🌊 The waterfall! Frogs love hopping on the lily pads below it.'); break;
     }
   }
@@ -652,7 +669,7 @@
     return { x: x - 26, y: by - 40, w: 52, h: 50 };
   }
   function drawHover(h, t) {
-    if (h.type === 'falls') return;
+    if (h.type === 'falls' || h.type === 'cave') return;
     // the glow itself is painted under the entity while it is drawn; this adds a name tag where there is none
     if (h.type === 'lake' || h.type === 'person' || (h.type === 'animal' && h.a.named)) return;
     const bb = hoverBox(h);
@@ -724,7 +741,9 @@
     const inline = el('div', 'inline'); const inp = el('input'); inp.type = 'text'; inp.maxLength = 14; inp.value = target.name; inp.autocomplete = 'off'; inp.setAttribute('aria-label', 'Name');
     inp.addEventListener('input', () => { if (inp.value.trim()) target.name = inp.value.trim(); });
     const shuffle = el('button', 'small', '🎲'); shuffle.title = 'Random name'; shuffle.onclick = () => { inp.value = pick(type === 'person' ? PERSON_NAMES : ANIMAL_NAMES); target.name = inp.value; Sound.play('click'); };
-    inline.append(inp, shuffle); left.appendChild(inline);
+    const reset = el('button', 'small', '↩️'); reset.title = 'Back to the original look'; reset.onclick = () => { resetLook(target, type); Sound.play('pop'); openSheet(buildCustomizer(target, type, opts), sheetDismissable); };
+    inline.append(inp, shuffle, reset); left.appendChild(inline);
+    if (type === 'person' && !target.def) target.def = { name: target.name, skin: target.skin, shirt: target.shirt, pants: target.pants, hair: target.hair, acc: target.acc || 'none' };
     const fields = type === 'person' ? [['skin', 'Skin', SKIN_COLORS], ['shirt', 'Shirt', PEOPLE_COLORS], ['pants', 'Pants', PEOPLE_COLORS], ['hair', 'Hair', HAIR_COLORS]]
       : type === 'sky' ? [['c1', 'Color', SKY_COLORS], ['c2', 'Glow', SKY_COLORS]]
       : [['c1', 'Color', ANIMAL_COLORS], ['c2', 'Accent', ANIMAL_COLORS]];
@@ -760,6 +779,11 @@
     redraw();
     const iv = setInterval(() => { if (!document.body.contains(pv)) { clearInterval(iv); return; } redraw(); }, 100);
     return card;
+  }
+  function resetLook(target, type) {
+    if (type === 'person') { if (target.def) Object.assign(target, target.def); else target.acc = 'none'; }
+    else if (type === 'sky') { const sun = target === S.sun; Object.assign(target, sun ? { name: 'Sunny', c1: '#ffd84a', c2: '#fff2a8', acc: 'none' } : { name: 'Luna', c1: '#f2f4ff', c2: '#d6dbf0', acc: 'none' }); }
+    else { const sp = ANIMALS[target.sp], n = S.animals.filter(a => a.sp === target.sp).indexOf(target); Object.assign(target, { c1: sp.c1, c2: sp.c2, acc: 'none', name: n > 0 ? `${sp.name} ${n + 1}` : sp.name, named: false }); }
   }
   function showSkySheet(sun) {
     const body = sun ? S.sun : S.moon;
@@ -909,7 +933,8 @@
       <li>🌿 <b>Tap the thick jungle</b> to clear a new spot for ${CLEAR_COST} seeds. A new friend also clears ${RULES.slots.perNewcomer} spots every sunrise (up to ${RULES.people.max} friends).</li>
       <li>🦉 Some animals only come out at night. Day animals sleep.</li>
       <li>✏️ <b>Tap any person or animal</b> to name it and give it colors and a hat. The <b>sun and moon</b> too!</li>
-      <li>🐸 Frogs hop onto the lily pads under the waterfall.</li>
+      <li>🐸 Frogs hop onto the lily pads under the waterfall. Bats sleep in the cave by day, and the bear sleeps there at night.</li>
+      <li>↩️ The small ↩️ button on a name card puts the look back to how it started.</li>
       <li>👆 Swipe, or use ◀ ▶ to look around and ➕ ➖ to zoom. Pinch works too!</li>
       <li>🖱️ On a computer, point at anything to see what it is before you click.</li>
     </ul>`;
@@ -931,7 +956,7 @@
     const broughtBy = id => Object.values(ANIMALS).filter(a => a.brings.includes(id)).map(a => a.name).join(', ') || (PLANTS[id].starter ? 'starter' : '—');
     const landW = WORLD.SLOT_X0 + (WORLD.MAX_SLOTS - 1) * WORLD.SLOT_DX;
     sec('🌍 World & time', [
-      `World is ${WORLD.W}×${WORLD.H} units, ground at y=${WORLD.GROUND_Y}, lake from x=${WORLD.LAKE_X}, waterfall cliff from x=${WORLD.FALLS_X}. Lily pads at x=${WORLD.LILY_PADS.join(', ')} (frogs hop onto them and onto grown water lilies). ${WORLD.MAX_SLOTS} land spots every ${WORLD.SLOT_DX} units from x=${WORLD.SLOT_X0} to ${landW}, plus ${WORLD.LAKE_SLOTS.length} floating lake spots (water plants only).`,
+      `World is ${WORLD.W}×${WORLD.H} units, ground at y=${WORLD.GROUND_Y}, cave at x=${WORLD.CAVE_X}, lake from x=${WORLD.LAKE_X}, waterfall cliff from x=${WORLD.FALLS_X}. Lily pads at x=${WORLD.LILY_PADS.join(', ')} (frogs hop onto them and onto grown water lilies). ${WORLD.MAX_SLOTS} land spots every ${WORLD.SLOT_DX} units from x=${WORLD.SLOT_X0} to ${landW}, plus ${WORLD.LAKE_SLOTS.length} floating lake spots (water plants only).`,
       `Day ${WORLD.DAY}s + night ${WORLD.NIGHT}s = ${WORLD.CYCLE}s per day. A new jungle starts ${25}s into Day 1. Sunrise = day number changes.`,
       `Camera: base scale fits the ${WORLD.H}-unit height (or 420 units wide on portrait phones), zoom 0.55–2.4×, drag / ◀ ▶ hold or tap (half-screen hop), pinch, wheel.`,
       `Game time only runs while the page is open and no sheet is showing. Nothing grows while the game is closed. Autosave every ${R.save.every}s and when the tab hides (localStorage key <code>${SAVE_KEY}</code>, v${SAVE_VERSION}).`,
@@ -939,7 +964,7 @@
     sec('🌱 Planting & growth', [
       `Start with ${R.slots.start} open land spots. Each new friend clears +${R.slots.perNewcomer}; tapping thick jungle clears +1 right away for ${R.slots.clearCost} seeds of one kind. Lake spots are always open.`,
       `Tap a spot → seed leaves your pocket at once, the plant is "pending" until the nearest free person walks over (${R.people.walkSpeed} units/s) and plants for ${R.people.plantTime}s (clearing takes ${R.people.clearTime}s). Lake seeds are tossed from the shore.`,
-      `Growth per second = 1 / grow-time × ${R.growth.nightRate} at night × ${R.growth.rainRate} in rain. Sprout shows at ${pct(R.growth.sproutAt)}. At 100%: sparkle, toast, counts as grown.`,
+      `A growing plant shows a progress bar under it; at 100% the bar becomes the level stars. Growth per second = 1 / grow-time × ${R.growth.nightRate} at night × ${R.growth.rainRate} in rain. Sprout shows at ${pct(R.growth.sproutAt)}. At 100%: sparkle, toast, counts as grown.`,
       `Grown fruit plants make one fruit every <i>interval</i> seconds (× ${R.growth.fruitRainRate} faster in rain) until <i>max</i>. Animals eat one fruit per visit.`,
       `Upgrade (levels 1–${R.upgrade.maxLevel}): costs level+1 seeds of the same kind (so 2 then 3). Each level: +${pct(R.upgrade.sizePerLevel)} size, +${R.upgrade.fruitMaxPerLevel} max fruit, ${pct(R.upgrade.fruitSpeedPerLevel)} faster fruit, +${pct(R.upgrade.giftBonusPerLevel)} seed chance when eaten from. Stars under the plant show the level.`,
       `Replace: plant removed, 1 seed of its kind refunded, seed picker opens for that spot. Animals perched on it fly off and pick a new spot.`,
@@ -956,7 +981,7 @@
     sec('🐒 Animals', [
       `Every ${R.animals.spawnEvery}s the game checks each species: not already at its max, right time of day, and its requirement (below) is true → it shows up with ${pct(R.animals.spawnChance)} chance (rare ones have their own chance). At most ${R.animals.maxPerCheck} species arrive per check. Animals never leave for good.`,
       `Kinds: <b>bird</b> perches on tree tops, <b>climber</b> sits in canopies, <b>bug</b> hovers at flowers and lilies, <b>ground</b> walks the land (some stick near the lake), <b>lake</b> swims, <b>glow</b> = fireflies at a flower.`,
-      `Day animals fall asleep where they are at night (Zzz). Night animals leave at sunrise and come back at sunset. "Both" animals stay around the clock.`,
+      `Animals with home = cave (${Object.values(ANIMALS).filter(a => a.home === 'cave').map(a => a.name).join(', ')}) walk or fly to the cave when they go off duty and sleep there; bats hang from the roof. Day animals fall asleep where they are at night (Zzz). Other night animals leave at sunrise and come back at sunset. "Both" animals stay around the clock.`,
       `<b>Welcome gift:</b> every animal that brings seeds hands one over ${rng(R.animals.welcomeDelay)} after settling in, guaranteed.`,
       `After that, each animal has a gift timer (<i>gift</i> column). Non-eaters gift when it runs out. Eaters gift while eating a fruit they like: chance ${pct(R.animals.giftChance)} (+level bonus). If none of an animal's foods is planted anywhere, it gifts on the timer anyway with ${pct(R.animals.noFoodGiftChance)} chance so no seed chain dead-ends.`,
       `A gift is a brand-new kind ${pct(R.animals.newSeedBias)} of the time if the animal knows one you lack, otherwise a random kind from its list. Eating takes ${R.animals.eatTime}s.`,
@@ -979,7 +1004,7 @@
     openSheet(card, true);
   }
   function showWelcome() {
-    if (!S.people.length) S.people.push(makePerson(pick(PERSON_NAMES), 300));
+    if (!S.people.length) S.people.push(makePerson(pick(PERSON_NAMES), WORLD.SLOT_X0 + 100));
     const pe = S.people[0];
     openSheet(buildCustomizer(pe, 'person', { title: '🌴 Welcome to Jungle Planting!', subtitle: 'Name your explorer and pick a look!', doneLabel: 'Start planting! 🌱', onDone: () => {
       S.started = true; cam.x = pe.x - cam.viewW / 2; applyCam();
@@ -996,7 +1021,7 @@
   // ---------- main loop ----------
   function updateHover() {
     const h = (mouse.active && !ptr && !pinch && S.started && !sheetOpen) ? (() => { const w = toWorld(mouse.sx, mouse.sy); return hitTest(w.x, w.y); })() : null;
-    hover = h; const cur = h && h.type !== 'lake' && h.type !== 'falls' ? 'pointer' : '';
+    hover = h; const cur = h && h.type !== 'lake' && h.type !== 'falls' && h.type !== 'cave' ? 'pointer' : '';
     if (canvas.style.cursor !== cur) canvas.style.cursor = cur;
   }
   function frame(now) {
@@ -1023,5 +1048,5 @@
   }
   init();
   // Debug helpers (open the browser console): JP.skip(60) fast-forwards 60 seconds of game time.
-  window.JP = { state: () => S, cam, focusSlot, hitTest, hover: () => hover, dev: showDevSheet, step: (dt = 1 / 60) => { updateEffects(dt); updateCamera(dt); draw(); }, toScreen: (x, y) => ({ x: (x - cam.x) * cam.scale, y: y * cam.scale + cam.offY }), skip: sec => { for (let i = 0; i < sec * 10; i++) update(0.1); renderSeedBar(); updateHud(); }, save, give: (k, n = 5) => { S.seeds[k] = (S.seeds[k] || 0) + n; if (!S.unlocked.includes(k)) S.unlocked.push(k); renderSeedBar(); } };
+  window.JP = { state: () => S, cam, focusSlot, hitTest, hover: () => hover, dev: showDevSheet, spawn, step: (dt = 1 / 60) => { updateEffects(dt); updateCamera(dt); draw(); }, toScreen: (x, y) => ({ x: (x - cam.x) * cam.scale, y: y * cam.scale + cam.offY }), skip: sec => { for (let i = 0; i < sec * 10; i++) update(0.1); renderSeedBar(); updateHud(); }, save, give: (k, n = 5) => { S.seeds[k] = (S.seeds[k] || 0) + n; if (!S.unlocked.includes(k)) S.unlocked.push(k); renderSeedBar(); } };
 })();
