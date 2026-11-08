@@ -20,6 +20,10 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: 
 .toast.out { opacity: 0; transition: opacity .4s; }
 @keyframes pop { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
+#tip { position: fixed; z-index: 6; background: rgba(27,42,29,0.95); color: #fff; padding: 10px 14px; border-radius: 14px; font-size: 13px; line-height: 1.5; max-width: 300px; pointer-events: none; box-shadow: 0 6px 18px rgba(0,0,0,0.35); animation: pop .15s ease-out; }
+#tip.hidden { display: none; }
+#tip b { font-size: 15px; }
+
 /* Seed bar */
 #seedbar { position: fixed; bottom: 0; left: 0; right: 0; display: flex; gap: 8px; padding: 8px 10px calc(10px + env(safe-area-inset-bottom)); overflow-x: auto; background: linear-gradient(180deg, rgba(27,42,29,0) 0%, rgba(27,42,29,0.55) 100%); scrollbar-width: none; }
 #seedbar::-webkit-scrollbar { display: none; }

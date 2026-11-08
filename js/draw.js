@@ -1,6 +1,9 @@
 // ===== Drawing: sky, ground, lake, plants, critters, people =====
 const Draw = (() => {
   const TAU = Math.PI * 2;
+  // Set by the game every frame. skyTop = world y at the top of the screen; stretch = backdrop height factor; boost = plant size factor (both grow when zoomed out so the jungle fills the view).
+  const view = { skyTop: -60, stretch: 1, boost: 1 };
+  function setView(v) { Object.assign(view, v); }
 
   // --- primitives ---
   function ell(ctx, x, y, rx, ry, color, rot = 0) { ctx.beginPath(); ctx.ellipse(x, y, Math.max(0.1, rx), Math.max(0.1, ry), rot, 0, TAU); ctx.fillStyle = color; ctx.fill(); }
@@ -64,7 +67,7 @@ const Draw = (() => {
   function drawStars(ctx, t, night) {
     if (night <= 0) return;
     for (let i = 0; i < 90; i++) {
-      const x = seeded(i) * WORLD.W, y = seeded(i + 500) * (WORLD.GROUND_Y - 140) - 60;
+      const top = Math.min(-60, view.skyTop), x = seeded(i) * WORLD.W, y = top + seeded(i + 500) * (WORLD.GROUND_Y - 200 - top);
       const tw = 0.5 + 0.5 * Math.sin(t * (1 + seeded(i + 900)) + i);
       ctx.globalAlpha = night * (0.4 + 0.6 * tw);
       circ(ctx, x, y, 1 + seeded(i + 300) * 1.5, '#fff');
@@ -76,7 +79,8 @@ const Draw = (() => {
   function sunMoonPos(phase) {
     const gy = WORLD.GROUND_Y, sun = phase < WORLD.DAY;
     const p = sun ? phase / WORLD.DAY : (phase - WORLD.DAY) / WORLD.NIGHT;
-    return { x: 60 + p * (WORLD.W - 120), y: gy - 40 - Math.sin(Math.PI * p) * 330, sun };
+    const peak = Math.min(60, view.skyTop + 90); // climbs higher when more sky is on screen
+    return { x: 60 + p * (WORLD.W - 120), y: gy - 40 - Math.sin(Math.PI * p) * (gy - 40 - peak), sun };
   }
   // body: { c1, c2, acc } chosen by the player
   function drawSunMoonAt(ctx, x, y, body, sun, t) {
@@ -111,7 +115,7 @@ const Draw = (() => {
     for (let i = 0; i < 6; i++) {
       const sp = 6 + seeded(i + 42) * 8;
       const x = ((seeded(i) * (WORLD.W + 400) + t * sp) % (WORLD.W + 400)) - 200;
-      const y = 40 + seeded(i + 7) * 120;
+      const top = Math.min(40, view.skyTop + 60), y = top + seeded(i + 7) * (WORLD.GROUND_Y - 260 - top);
       const s = 0.7 + seeded(i + 11) * 0.6;
       ctx.globalAlpha = 0.85;
       ell(ctx, x, y, 40 * s, 18 * s, col); circ(ctx, x - 22 * s, y + 2, 18 * s, col); circ(ctx, x + 10 * s, y - 10 * s, 22 * s, col); circ(ctx, x + 32 * s, y + 2, 16 * s, col);
@@ -136,20 +140,20 @@ const Draw = (() => {
     for (let k = -2; k <= 2; k++) { const a = -Math.PI / 2 + k * 0.42 + (seeded(seed) - 0.5) * 0.2, L = size * (1 - Math.abs(k) * 0.15); const ex = x + Math.cos(a) * L, ey = gy + Math.sin(a) * L; line(ctx, x, gy, ex, ey, col, 2); for (let j = 1; j <= 3; j++) { const px = x + (ex - x) * j / 4, py = gy + (ey - gy) * j / 4, s = L * 0.18 * (1 - j / 5); line(ctx, px, py, px + Math.cos(a + 1.1) * s, py + Math.sin(a + 1.1) * s, col, 1.5); line(ctx, px, py, px + Math.cos(a - 1.1) * s, py + Math.sin(a - 1.1) * s, col, 1.5); } }
   }
   function drawFarJungle(ctx) {
-    const gy = WORLD.GROUND_Y, W = WORLD.W;
+    const gy = WORLD.GROUND_Y, W = WORLD.W, st = view.stretch, rs = 1 + (st - 1) * 0.45;
     // far misty canopy
-    for (let i = -2; i * 64 < W + 100; i++) { const x = i * 64 + seeded(i * 7) * 30, r = 55 + seeded(i * 3 + 1) * 40; circ(ctx, x, gy - 135 - seeded(i) * 40 + r * 0.3, r, '#3b7a62'); }
-    rect(ctx, -200, gy - 260, W + 600, 270, 'rgba(190,225,215,0.16)');
+    for (let i = -2; i * 64 < W + 100; i++) { const x = i * 64 + seeded(i * 7) * 30, r = (55 + seeded(i * 3 + 1) * 40) * rs; circ(ctx, x, gy - (135 + seeded(i) * 40) * st + r * 0.3, r, '#3b7a62'); }
+    rect(ctx, -200, gy - 260 * st, W + 600, 270 * st, 'rgba(190,225,215,0.16)');
     // tall jungle trees with buttress roots, big crowns and the odd hanging vine
     for (let i = -1; i * 84 < W + 60; i++) {
-      const x = i * 84 + seeded(i * 11 + 5) * 40, h = 190 + seeded(i * 5 + 2) * 90, tw = 7 + seeded(i) * 5, R = 34 + seeded(i * 13) * 22;
+      const x = i * 84 + seeded(i * 11 + 5) * 40, h = (190 + seeded(i * 5 + 2) * 90) * st, tw = (7 + seeded(i) * 5) * rs, R = (34 + seeded(i * 13) * 22) * rs;
       const col = '#245f33', dark = '#1c4d2a';
       rect(ctx, x - tw / 2, gy - h, tw, h + 10, dark);
       poly(ctx, [[x - tw / 2, gy - 30], [x - tw * 2.2, gy + 2], [x - tw / 2, gy + 2]], dark); poly(ctx, [[x + tw / 2, gy - 30], [x + tw * 2.2, gy + 2], [x + tw / 2, gy + 2]], dark);
       circ(ctx, x - R * 0.8, gy - h + R * 0.2, R * 0.75, col); circ(ctx, x + R * 0.85, gy - h + R * 0.15, R * 0.8, col); circ(ctx, x, gy - h - R * 0.3, R, col); circ(ctx, x + R * 0.1, gy - h - R * 0.9, R * 0.6, col);
       if (i % 3 === 0) { line(ctx, x, gy - h + 12, x + 44, gy - h - 4, dark, 4); vine(ctx, x + 44, gy - h - 4, 70 + seeded(i) * 50, i); vine(ctx, x + 22, gy - h + 4, 40 + seeded(i + 1) * 30, i + 9); }
     }
-    for (let i = 0; 70 + i * 190 < W; i++) { const x = 70 + i * 190 + seeded(i * 17) * 60; palmSil(ctx, x, gy, 150 + seeded(i * 3) * 60, '#1c4d2a', i); }
+    for (let i = 0; 70 + i * 190 < W; i++) { const x = 70 + i * 190 + seeded(i * 17) * 60; palmSil(ctx, x, gy, (150 + seeded(i * 3) * 60) * st, '#1c4d2a', i); }
     // near ferns and bushes along the ground
     for (let i = -2; i * 30 < W + 40; i++) { const x = i * 30 + seeded(i * 19) * 20; if (i % 2) fern(ctx, x, gy, 20 + seeded(i) * 16, '#163f22', i); else circ(ctx, x, gy - 12, 16 + seeded(i + 3) * 12, '#1a4a28'); }
   }
@@ -307,7 +311,7 @@ const Draw = (() => {
   function levelScale(level) { return 1 + RULES.upgrade.sizePerLevel * ((level || 1) - 1); }
   function plantMetrics(def, progress, level) {
     const pr = Math.min(1, progress);
-    const s = (pr < 0.12 ? 0.08 : 0.25 + 0.75 * (pr - 0.12) / 0.88) * levelScale(level);
+    const s = (pr < 0.12 ? 0.08 : 0.25 + 0.75 * (pr - 0.12) / 0.88) * levelScale(level) * view.boost;
     const H = def.height * s;
     let topY, canopyY, R;
     switch (def.style) {
@@ -744,6 +748,19 @@ const Draw = (() => {
     eye(ctx, 10, -28, 1.8, o.closed); eye(ctx, 15, -28, 1.8, o.closed);
     return { hx: 12, hy: -26, hr: 9 };
   };
+  C.panda = (ctx, o) => {
+    const { c1, c2 } = o; const w = o.moving ? Math.sin(o.t * 8) * 3 : 0;
+    rrect(ctx, -16 + w, -12, 9, 13, 4, c2); rrect(ctx, 7 - w, -12, 9, 13, 4, c2);
+    ell(ctx, -2, -24, 20, 15, c1);
+    ell(ctx, -2, -31, 15, 6, c2);
+    rrect(ctx, -9 - w, -14, 9, 14, 4, c2); rrect(ctx, 0 + w, -14, 9, 14, 4, c2);
+    circ(ctx, 9, -43, 5, c2); circ(ctx, 23, -43, 5, c2);
+    circ(ctx, 16, -35, 12, c1);
+    ell(ctx, 11, -36, 4, 5, c2, 0.3); ell(ctx, 21, -36, 4, 5, c2, -0.3);
+    eye(ctx, 11, -36, 2, o.closed); eye(ctx, 21, -36, 2, o.closed);
+    circ(ctx, 16, -29, 2.2, c2); smile(ctx, 16, -29, 3.5);
+    return { hx: 16, hy: -35, hr: 12 };
+  };
   C.bat = (ctx, o) => {
     const { c1, c2 } = o; const f = o.moving ? Math.sin(o.t * 18) * 8 : 4;
     poly(ctx, [[-4, -16], [-16, -22 - f], [-28, -14 - f], [-22, -10], [-16, -14], [-10, -8]], c1);
@@ -880,5 +897,5 @@ const Draw = (() => {
     ctx.fillStyle = '#fff'; ctx.fillText(text, x, y);
   }
 
-  return { ell, circ, rect, rrect, line, poly, eye, smile, shade, lerpColor, seeded, nightFactor, drawSky, drawStars, drawSunMoon, drawClouds, drawFarJungle, drawGround, drawBush, drawMound, drawCave, drawCliff, drawFalls, drawStick, drawDam, drawIsland, drawLilyPad, drawPlantButton, sunMoonPos, drawSunMoonAt, waterY, drawLakeBasin, drawWater, drawWaterFront, plantMetrics, drawPlant, drawWaterSpot, levelScale, star, drawLevelStars, drawAccessory, drawPerson, drawCritter, drawFireflies, drawZzz, drawLabel };
+  return { setView, ell, circ, rect, rrect, line, poly, eye, smile, shade, lerpColor, seeded, nightFactor, drawSky, drawStars, drawSunMoon, drawClouds, drawFarJungle, drawGround, drawBush, drawMound, drawCave, drawCliff, drawFalls, drawStick, drawDam, drawIsland, drawLilyPad, drawPlantButton, sunMoonPos, drawSunMoonAt, waterY, drawLakeBasin, drawWater, drawWaterFront, plantMetrics, drawPlant, drawWaterSpot, levelScale, star, drawLevelStars, drawAccessory, drawPerson, drawCritter, drawFireflies, drawZzz, drawLabel };
 })();

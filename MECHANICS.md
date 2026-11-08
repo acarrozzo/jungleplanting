@@ -21,7 +21,8 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 
 ## Customizing
 
-- People, animals, the sun and the moon each have a name card with colors and a hat. Its ↩️ button restores the original look: a person's birth colors (stored on the person when they arrive), an animal's species colors and default name, the sun's and moon's defaults.
+- People, animals, the sun and the moon each have a name card with colors and a hat. Its ↩️ button restores the original look: a person's birth colors (stored on the person when they arrive), an animal's species colors and default name, the sun's and moon's defaults. An animal wears a permanent name tag only while its look or name differs from the default, so a reset removes the tag.
+- Pointing the mouse at a seed chip shows what it grows into, how long it takes, its fruit, who loves it, who brings it, how many you hold and whether you can upgrade one.
 
 ## Sun and moon
 
@@ -30,6 +31,7 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 ## Camera
 
 - Base scale fits the full world height, or 420 world units of width on portrait phones, whichever is smaller. Zoom multiplies that, clamped to 0.55 to 2.4.
+- Zoomed out, the sun and moon arc higher (peak 90 units below the top of the screen), stars and clouds spread into the extra sky, the backdrop stretches up to 2.3× and foreground plants grow up to 30% taller (`view.boost` in draw.js, applied inside `plantMetrics` so perches and hit boxes follow).
 - Drag to scroll, drag vertically when zoomed in. The ◀ ▶ buttons scroll while held and hop half a screen on a tap under 220 ms. Pinch and mouse wheel zoom around the pointer.
 
 ## Planting spots
@@ -68,6 +70,7 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 
 - Every 15 s the game checks every species in order. A species may arrive if it is below its `max`, none of its members is away, it is its active time of day, and its `req` function returns true for the current stats (grown counts per plant id, total grown trees, grown fruit trees, grown flowers including lilies, lake level, which species are present).
 - Each eligible species arrives with 45% chance per check, or its own `chance` for rare ones (elephant 7%, jaguar 10%). At most 2 species arrive per check.
+- Panda: comes when 2 bamboo are grown, eats bamboo, brings bamboo and berry seeds.
 - Requirements are tiered: the four starter trees and two flowers bring the first wave (toucan, parrot, hummingbird, butterflies, bees, monkey, lake animals). Tapir and owl need 5 grown trees, sloth and armadillo 6, gorilla 7, jaguar 9, elephant 11, bat 5 fruit trees, duck 3 flowers.
 - Animals never leave for good once they have arrived.
 

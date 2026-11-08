@@ -510,6 +510,8 @@
   // ---------- draw ----------
   function draw() {
     const t = performance.now() / 1000, ph = phase(), frac = ph / WORLD.CYCLE, night = Draw.nightFactor(frac);
+    const skyTop = -cam.offY / cam.scale, above = GY - skyTop;
+    Draw.setView({ skyTop, stretch: clamp(above / 480, 1, 2.3), boost: clamp(Math.pow(1 / cam.zoom, 0.4), 1, 1.3) });
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     Draw.drawSky(ctx, W, H, frac, rainVis);
     worldTransform();
@@ -791,18 +793,40 @@
       const d = PLANTS[k], n = S.seeds[k] || 0;
       const chip = document.createElement('button');
       chip.className = 'chip' + (selectedSeed === k ? ' sel' : '') + (n ? '' : ' empty');
-      chip.innerHTML = `<span class="em">${d.emoji}</span><span class="n">${n}</span>`; chip.title = d.name;
+      chip.innerHTML = `<span class="em">${d.emoji}</span><span class="n">${n}</span>`; chip.setAttribute('aria-label', d.name);
+      chip.addEventListener('mouseenter', () => showTip(chip, seedTip(k))); chip.addEventListener('mouseleave', hideTip); chip.addEventListener('focus', () => showTip(chip, seedTip(k))); chip.addEventListener('blur', hideTip);
       chip.onclick = () => {
         Sound.init(); Sound.resume(); Sound.play('click');
         if (!n) { toast(`No ${d.name} seeds right now. Animals bring more!`); return; }
         selectedSeed = selectedSeed === k ? null : k; renderSeedBar();
-        if (selectedSeed) toast(d.kind === 'water' ? `${d.emoji} ${d.name} picked! Tap a floating spot in the lake to plant it.` : `${d.emoji} ${d.name} picked! Tap a dirt spot to plant it.`, 3000);
+        if (selectedSeed) toast(d.kind === 'water' ? `${d.emoji} ${d.name} picked! Tap a floating spot in the lake. Grows in ${fmtTime(d.grow)}.` : `${d.emoji} ${d.name} picked! Tap a dirt spot or a ➕. Grows in ${fmtTime(d.grow)}.`, 3500);
       };
       bar.appendChild(chip);
     };
     const group = (label, keys) => { const g = el('div', 'seedgroup'); g.appendChild(el('span', 'grouplbl', label)); bar.appendChild(g); keys.forEach(addChip); };
     if (water.length) { group('🌱 land', land); group('💧 lake', water); } else land.forEach(addChip);
   }
+
+  // ---------- seed tooltips (mouse) ----------
+  function fmtTime(sec) { return sec >= 60 ? `${Math.round(sec / 60 * 10) / 10} min`.replace('.0 ', ' ') : `${sec} s`; }
+  function seedTip(k) {
+    const d = PLANTS[k], n = S.seeds[k] || 0;
+    const fans = Object.values(ANIMALS).filter(a => a.eats.includes(k)).map(a => a.name);
+    const from = Object.values(ANIMALS).filter(a => a.brings.includes(k)).map(a => a.name);
+    const planted = S.plants.filter(p => p && p.id === k).length, grownUp = S.plants.find(p => p && p.id === k && p.progress >= 1 && (p.level || 1) < MAX_LEVEL);
+    const lines = [`<b>${d.emoji} ${d.name}</b>`, `${d.kind === 'water' ? '🪷 Grows on a lake spot' : d.kind === 'tree' ? '🌳 A tree for a dirt spot' : '🌸 A flower for a dirt spot'} · ready in ${fmtTime(d.grow)}`];
+    lines.push(d.fruit ? `🍽️ ${d.fruit.name} every ${d.fruit.interval}s, up to ${d.fruit.max}` : '🌿 No fruit, but animals count it as a tree');
+    if (fans.length) lines.push(`❤️ Loved by ${fans.join(', ')}`);
+    lines.push(from.length ? `🎁 Brought by ${from.join(', ')}` : '🌱 One of your starter seeds');
+    lines.push(`👜 You have ${n}${planted ? ` · ${planted} planted` : ''}${grownUp && n >= upgradeCost(grownUp) ? ' · ⬆️ enough to upgrade one!' : ''}`);
+    return lines.join('<br>');
+  }
+  function showTip(anchor, html) {
+    const tip = $('tip'); tip.innerHTML = html; tip.classList.remove('hidden');
+    const r = anchor.getBoundingClientRect(), tw = tip.offsetWidth;
+    tip.style.left = clamp(r.left + r.width / 2 - tw / 2, 8, W - tw - 8) + 'px'; tip.style.top = (r.top - tip.offsetHeight - 10) + 'px';
+  }
+  function hideTip() { $('tip').classList.add('hidden'); }
 
   // ---------- UI: sheets ----------
   function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -858,6 +882,7 @@
     const iv = setInterval(() => { if (!document.body.contains(pv)) { clearInterval(iv); return; } redraw(); }, 100);
     return card;
   }
+  function isDefaultLook(a) { const sp = ANIMALS[a.sp]; return a.c1 === sp.c1 && a.c2 === sp.c2 && (a.acc || 'none') === 'none' && (a.name === sp.name || new RegExp('^' + sp.name + ' \\d+$').test(a.name)); }
   function resetLook(target, type) {
     if (type === 'person') { if (target.def) Object.assign(target, target.def); else target.acc = 'none'; }
     else if (type === 'sky') { const sun = target === S.sun; Object.assign(target, sun ? { name: 'Sunny', c1: '#ffd84a', c2: '#fff2a8', acc: 'none' } : { name: 'Luna', c1: '#f2f4ff', c2: '#d6dbf0', acc: 'none' }); }
@@ -871,7 +896,7 @@
   }
   function showAnimalSheet(a) {
     const sp = ANIMALS[a.sp];
-    openSheet(buildCustomizer(a, 'animal', { title: a.named ? `✏️ ${a.name}` : `🎉 A ${sp.name} is here! Name it!`, subtitle: sp.hint, onDone: () => { a.named = true; } }), true);
+    openSheet(buildCustomizer(a, 'animal', { title: a.named ? `✏️ ${a.name}` : `🎉 A ${sp.name} is here! Name it!`, subtitle: sp.hint, onDone: () => { a.named = !isDefaultLook(a); } }), true);
   }
   function seedGrid(filterFn, onPick) {
     const grid = el('div', 'seedgrid'); let any = false;
@@ -1014,7 +1039,8 @@
       <li>⏸️ The pause button stops time. The game also pauses by itself when you switch apps.</li>
       <li>🦫 When the beaver arrives, grown trees drop sticks. <b>Tap sticks</b> (or let the beaver fetch them) and it builds a dam in 3 stages, then an island with 2 new planting spots. A full lake spills over the dam!</li>
       <li>🐸 Frogs hop onto the lily pads under the waterfall. Bats sleep in the cave by day, and the bear sleeps there at night.</li>
-      <li>↩️ The small ↩️ button on a name card puts the look back to how it started.</li>
+      <li>↩️ The small ↩️ button on a name card puts the look back to how it started (an animal then loses its name tag).</li>
+      <li>🖱️ Point at a seed in the bar to see what it grows into and who loves it.</li>
       <li>👆 Swipe, or use ◀ ▶ to look around and ➕ ➖ to zoom. Pinch works too!</li>
       <li>🖱️ On a computer, point at anything to see what it is before you click.</li>
     </ul>`;
@@ -1038,7 +1064,7 @@
     sec('🌍 World & time', [
       `World is ${WORLD.W}×${WORLD.H} units, ground at y=${WORLD.GROUND_Y}, cave at x=${WORLD.CAVE_X}, lake from x=${WORLD.LAKE_X}, waterfall cliff from x=${WORLD.FALLS_X}. Lily pads at x=${WORLD.LILY_PADS.join(', ')} (frogs hop onto them and onto grown water lilies). ${WORLD.MAX_SLOTS} land spots every ${WORLD.SLOT_DX} units from x=${WORLD.SLOT_X0} to ${landW}, plus ${WORLD.LAKE_SLOTS.length} floating lake spots (water plants only).`,
       `Day ${WORLD.DAY}s + night ${WORLD.NIGHT}s = ${WORLD.CYCLE}s per day. A new jungle starts ${25}s into Day 1. Sunrise = day number changes.`,
-      `Camera: base scale fits the ${WORLD.H}-unit height (or 420 units wide on portrait phones), zoom 0.55–2.4×, drag / ◀ ▶ hold or tap (half-screen hop), pinch, wheel.`,
+      `Camera: base scale fits the ${WORLD.H}-unit height (or 420 units wide on portrait phones), zoom 0.55–2.4×, drag / ◀ ▶ hold or tap (half-screen hop), pinch, wheel. Zoomed out, the sun and moon climb toward the top of the screen, the backdrop stretches up to 2.3× and plants get up to 30% taller so the jungle fills the view.`,
       `Game time only runs while the page is open and no sheet is showing. Nothing grows while the game is closed. Autosave every ${R.save.every}s and when the tab hides (localStorage key <code>${SAVE_KEY}</code>, v${SAVE_VERSION}).`,
     ]);
     sec('🌱 Planting & growth', [
