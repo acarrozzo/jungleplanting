@@ -13,8 +13,8 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 
 ## World and time
 
-- The world is 1780 × 560 units. Ground is at y = 430. A cave sits at x = 85 on the left. The lake basin starts at x = 1330 and ends at a waterfall cliff at x = 1738. The beaver's dam goes at x = 1690.
-- 16 land planting spots sit every 72 units from x = 200. Three floating lake spots at x = 1420, 1495, 1570 take water plants only. Three decorative lily pads float at x = 1380, 1458, 1532.
+- The world is 1900 × 560 units. Ground is at y = 430 and is grass all the way down. A cave sits at x = 85 on the left. The lake basin starts at x = 1450, is 115 units deep (seaweed sways on the bottom) and ends at a waterfall cliff at x = 1858. The beaver's dam goes at x = 1810.
+- 16 land planting spots sit every 80 units from x = 200. Three floating lake spots at x = 1540, 1615, 1690 take water plants only. Three decorative lily pads float at x = 1500, 1578, 1652.
 - A day is 180 s of daylight plus 90 s of night (270 s). A new jungle starts 25 s into Day 1. The day number is `floor(t / 270) + 1`; when it changes, sunrise happens.
 - Game time only advances while the page is open, no sheet is showing and the game is not paused. The ⏸️ button pauses; switching apps or tabs pauses automatically. There is no offline growth.
 - Autosave every 5 s and whenever the tab hides, to `localStorage` under `junglePlanting.save.v1` (save format version 2, with migration from version 1).

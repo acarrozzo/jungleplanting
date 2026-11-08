@@ -160,15 +160,24 @@ const Draw = (() => {
 
   function drawGround(ctx) {
     const gy = WORLD.GROUND_Y;
-    rect(ctx, -3000, gy, 8000, 3000, '#6b4a2b');
-    rect(ctx, -3000, gy, 8000, 14, '#3f8f3a');
+    // grass all the way down: bright at the top, deeper green further down
+    const g = ctx.createLinearGradient(0, gy, 0, gy + 170); g.addColorStop(0, '#3f8f3a'); g.addColorStop(1, '#245c2a');
+    ctx.fillStyle = g; ctx.fillRect(-3000, gy, 8000, 170);
+    rect(ctx, -3000, gy + 170, 8000, 3000, '#245c2a');
     rect(ctx, -3000, gy, 8000, 5, '#56b04a');
-    // grass tufts
+    // grass tufts along the edge
     for (let i = -20; i < 200; i++) {
       const x = i * 23 + seeded(i) * 10;
       if (x > WORLD.LAKE_X - 10) break;
       line(ctx, x, gy + 2, x - 3, gy - 6 - seeded(i + 5) * 5, '#56b04a', 2);
       line(ctx, x + 3, gy + 2, x + 6, gy - 5 - seeded(i + 9) * 5, '#4aa040', 2);
+    }
+    // lighter blades scattered down the meadow
+    for (let i = -20; i < 400; i++) {
+      const x = i * 15 + seeded(i * 3) * 12, y = gy + 14 + seeded(i * 7) * 130;
+      if (x > WORLD.LAKE_X - 40) break;
+      line(ctx, x, y + 4, x - 2, y - 4 - seeded(i) * 4, 'rgba(130,205,95,0.38)', 2);
+      line(ctx, x + 3, y + 4, x + 5, y - 3 - seeded(i + 2) * 3, 'rgba(130,205,95,0.3)', 2);
     }
   }
 
@@ -209,8 +218,8 @@ const Draw = (() => {
   }
   function drawDam(ctx, stage, level, t, spill) {
     if (!stage) return;
-    const gy = WORLD.GROUND_Y, dx = WORLD.DAM_X, floor = gy + 75, wy = waterY(level);
-    const h = [0, 34, 58, 86][Math.min(stage, 3)], top = floor - h;
+    const gy = WORLD.GROUND_Y, dx = WORLD.DAM_X, floor = gy + WORLD.LAKE_FLOOR, wy = waterY(level), extra = WORLD.LAKE_FLOOR - 75;
+    const h = [0, 34, 58, 86][Math.min(stage, 3)] + (stage ? extra : 0), top = floor - h;
     rrect(ctx, dx - 16, top, 32, h, 6, '#6b4320');
     for (let k = 0; k < Math.floor(h / 9); k++) { const y = floor - 6 - k * 9, off = (k % 2) * 5; rrect(ctx, dx - 15 + off, y - 3, 28 - off * 2, 6, 3, k % 2 ? '#8a5a2b' : '#a9743d'); circ(ctx, dx - 14 + off, y, 2.5, '#d9b48a'); circ(ctx, dx + 13 - off, y, 2.5, '#d9b48a'); }
     if (stage >= 3) { circ(ctx, dx - 10, top - 4, 6, '#3f8f3a'); circ(ctx, dx + 8, top - 5, 7, '#2e8b3a'); }
@@ -226,7 +235,8 @@ const Draw = (() => {
   // --- waterfall at the right end of the lake ---
   function drawCliff(ctx) {
     const gy = WORLD.GROUND_Y, fx = WORLD.FALLS_X, top = gy - 170;
-    poly(ctx, [[fx, gy + 80], [fx - 6, gy + 10], [fx + 4, gy - 60], [fx - 3, gy - 120], [fx + 6, top], [WORLD.W + 400, top], [WORLD.W + 400, gy + 80]], '#5a4a3a');
+    const bot = gy + WORLD.LAKE_FLOOR + 5;
+    poly(ctx, [[fx, bot], [fx - 6, gy + 10], [fx + 4, gy - 60], [fx - 3, gy - 120], [fx + 6, top], [WORLD.W + 400, top], [WORLD.W + 400, bot]], '#5a4a3a');
     for (let k = 0; k < 6; k++) { const y = top + 25 + k * 38; rrect(ctx, fx - 2 + (k % 2) * 6, y, 30 + (k % 3) * 8, 10, 4, k % 2 ? '#6b5a48' : '#4a3b2d'); }
     rect(ctx, fx - 4, top - 6, WORLD.W + 400, 8, '#2e8b3a'); // mossy lip
     for (let k = 0; k < 4; k++) circ(ctx, fx + 10 + k * 14, top - 8, 7 + (k % 2) * 3, '#3f8f3a');
@@ -253,8 +263,8 @@ const Draw = (() => {
   }
   // round "plant here" button under an empty spot; hot = a seed is picked so it bounces
   function drawPlantButton(ctx, x, y, t, hot) {
-    const by = y + 20 - (hot ? Math.abs(Math.sin(t * 5)) * 4 : 0), r = 12;
-    ctx.globalAlpha = 0.35; ell(ctx, x, y + 22, r + 2, 4, '#000'); ctx.globalAlpha = 1;
+    const by = y + 36 - (hot ? Math.abs(Math.sin(t * 5)) * 4 : 0), r = 12;
+    ctx.globalAlpha = 0.35; ell(ctx, x, y + 38, r + 2, 4, '#000'); ctx.globalAlpha = 1;
     circ(ctx, x, by, r, hot ? '#ffd21f' : '#ffffff');
     ctx.strokeStyle = hot ? '#b8860b' : '#2e8b3a'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, by, r, 0, TAU); ctx.stroke();
     line(ctx, x - 6, by, x + 6, by, '#2e8b3a', 3.5); line(ctx, x, by - 6, x, by + 6, '#2e8b3a', 3.5);
@@ -269,16 +279,36 @@ const Draw = (() => {
   // --- lake ---
   function waterY(level) { return WORLD.GROUND_Y + 60 - level * 62; }
   function drawLakeBasin(ctx) {
-    const gy = WORLD.GROUND_Y, lx = WORLD.LAKE_X;
-    poly(ctx, [[lx - 20, gy], [lx + 50, gy + 75], [WORLD.W + 400, gy + 75], [WORLD.W + 400, gy]], '#8a6a3e');
-    poly(ctx, [[lx - 20, gy], [lx + 50, gy + 75], [lx + 70, gy + 75], [lx + 5, gy]], '#a68556'); // sandy slope
+    const gy = WORLD.GROUND_Y, lx = WORLD.LAKE_X, fl = gy + WORLD.LAKE_FLOOR;
+    const g = ctx.createLinearGradient(0, gy, 0, fl); g.addColorStop(0, '#8a6a3e'); g.addColorStop(1, '#4d3a24');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(lx - 20, gy); ctx.lineTo(lx + 50, fl); ctx.lineTo(WORLD.W + 400, fl); ctx.lineTo(WORLD.W + 400, gy); ctx.closePath(); ctx.fill();
+    poly(ctx, [[lx - 20, gy], [lx + 50, fl], [lx + 70, fl], [lx + 5, gy]], '#a68556'); // sandy slope
   }
+  // swaying seaweed and pebbles on the lake bottom (drawn on top of the water, under the front tint)
+  function drawSeaweed(ctx, level, t) {
+    const gy = WORLD.GROUND_Y, floor = gy + WORLD.LAKE_FLOOR, wy = waterY(level);
+    const x0 = WORLD.LAKE_X + 64, x1 = WORLD.DAM_X - 34;
+    for (let i = 0; x0 - 20 + i * 41 < x1 + 30; i++) { const x = x0 - 20 + i * 41 + seeded(i * 9) * 20; ell(ctx, x, floor - 2, 5 + seeded(i) * 5, 3, i % 2 ? '#6b5a48' : '#8a7a62'); }
+    ctx.lineCap = 'round';
+    for (let i = 0; x0 + i * 26 < x1; i++) {
+      const x = x0 + i * 26 + seeded(i * 23) * 14, h = Math.min(floor - wy - 8, 26 + seeded(i * 5) * 44), col = i % 3 ? '#1f7a4a' : '#2a9a5a';
+      if (h < 8) continue;
+      const sway = Math.sin(t * 1.4 + i * 1.3) * 5, segs = 5;
+      ctx.strokeStyle = col; ctx.lineWidth = 3 + (i % 2);
+      ctx.beginPath(); ctx.moveTo(x, floor + 2);
+      for (let k = 1; k <= segs; k++) { const f = k / segs; ctx.lineTo(x + Math.sin(f * 3 + t * 1.4 + i) * 3 * f + sway * f, floor - h * f); }
+      ctx.stroke();
+      for (let k = 1; k < segs; k += 2) { const f = k / segs, lx = x + sway * f, ly = floor - h * f; ell(ctx, lx - 5, ly - 2, 5, 2.5, col); ell(ctx, lx + 5, ly + 1, 5, 2.5, col); }
+    }
+  }
+
   function drawWater(ctx, level, t) {
     const gy = WORLD.GROUND_Y, lx = WORLD.LAKE_X;
     const wy = waterY(level);
-    const xl = lx - 20 + (wy - gy) / 75 * 70;
+    const fl = gy + WORLD.LAKE_FLOOR, xl = lx - 20 + (wy - gy) / WORLD.LAKE_FLOOR * 70;
     ctx.globalAlpha = 0.9;
-    poly(ctx, [[xl, wy], [lx + 50, gy + 75], [WORLD.W + 400, gy + 75], [WORLD.W + 400, wy]], '#3aa0e0');
+    const g = ctx.createLinearGradient(0, wy, 0, fl); g.addColorStop(0, '#3aa0e0'); g.addColorStop(1, '#1f6fae');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(xl, wy); ctx.lineTo(lx + 50, fl); ctx.lineTo(WORLD.W + 400, fl); ctx.lineTo(WORLD.W + 400, wy); ctx.closePath(); ctx.fill();
     ctx.globalAlpha = 1;
     // surface shimmer
     for (let i = 0; i < 9; i++) {
@@ -292,9 +322,9 @@ const Draw = (() => {
   function drawWaterFront(ctx, level) {
     const gy = WORLD.GROUND_Y, lx = WORLD.LAKE_X;
     const wy = waterY(level);
-    const xl = lx - 20 + (wy - gy) / 75 * 70;
+    const fl = gy + WORLD.LAKE_FLOOR, xl = lx - 20 + (wy - gy) / WORLD.LAKE_FLOOR * 70;
     ctx.globalAlpha = 0.35;
-    poly(ctx, [[xl, wy], [lx + 50, gy + 75], [WORLD.W + 400, gy + 75], [WORLD.W + 400, wy]], '#4fb4f0');
+    poly(ctx, [[xl, wy], [lx + 50, fl], [WORLD.W + 400, fl], [WORLD.W + 400, wy]], '#4fb4f0');
     ctx.globalAlpha = 1;
     line(ctx, xl, wy, WORLD.W + 400, wy, '#e8f7ff', 2);
   }
@@ -904,5 +934,5 @@ const Draw = (() => {
     ctx.fillStyle = '#fff'; ctx.fillText(text, x, y);
   }
 
-  return { setView, ell, circ, rect, rrect, line, poly, eye, smile, shade, lerpColor, seeded, nightFactor, drawSky, drawStars, drawSunMoon, drawClouds, drawFarJungle, drawGround, drawBush, drawMound, drawCave, drawCliff, drawFalls, drawStick, drawDam, drawLilyPad, drawPlantButton, sunMoonPos, drawSunMoonAt, waterY, drawLakeBasin, drawWater, drawWaterFront, plantMetrics, drawPlant, drawWaterSpot, levelScale, star, drawLevelStars, drawAccessory, drawPerson, drawCritter, drawFireflies, drawZzz, drawLabel };
+  return { setView, ell, circ, rect, rrect, line, poly, eye, smile, shade, lerpColor, seeded, nightFactor, drawSky, drawStars, drawSunMoon, drawClouds, drawFarJungle, drawGround, drawBush, drawMound, drawCave, drawCliff, drawFalls, drawStick, drawDam, drawLilyPad, drawPlantButton, sunMoonPos, drawSunMoonAt, waterY, drawLakeBasin, drawSeaweed, drawWater, drawWaterFront, plantMetrics, drawPlant, drawWaterSpot, levelScale, star, drawLevelStars, drawAccessory, drawPerson, drawCritter, drawFireflies, drawZzz, drawLabel };
 })();

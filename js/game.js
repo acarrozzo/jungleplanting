@@ -114,7 +114,7 @@
     cam.viewW = W / cam.scale;
     const anchor = (H > W ? 0.78 : 0.74) + Math.max(0, cam.zoom - 1) * 0.12;
     const base = H * anchor - GY * cam.scale;
-    const lo = Math.min(base, H - (GY + 130) * cam.scale), hi = Math.max(base, 0);
+    const lo = Math.min(base, H - (GY + WORLD.LAKE_FLOOR + 100) * cam.scale), hi = Math.max(base, 0);
     cam.offY = clamp(base + cam.oy, lo, hi); cam.oy = cam.offY - base;
     cam.x = clamp(cam.x, 0, Math.max(0, WORLD.W - cam.viewW));
   }
@@ -249,7 +249,7 @@
     switch (sp.kind) {
       case 'bird': case 'bug': case 'climber': a.x = left ? cam.x - 80 : cam.x + cam.viewW + 80; a.y = GY - rand(180, 380); break;
       case 'ground': a.x = -70; a.y = GY; break;
-      case 'lake': a.x = zoneX(sp); a.depth = a.sp === 'fish' ? rand(10, 26) : 2; a.y = Draw.waterY(S.lake) + a.depth; splash(a.x, Draw.waterY(S.lake)); break;
+      case 'lake': a.x = zoneX(sp); a.depth = a.sp === 'fish' ? rand(10, 40) : 2; a.y = Draw.waterY(S.lake) + a.depth; splash(a.x, Draw.waterY(S.lake)); break;
       case 'glow': a.x = rand(100, WORLD.LAKE_X - 100); a.y = GY - 60; break;
     }
   }
@@ -290,7 +290,7 @@
     let choice = null;
     if (tasty.length && (a.giftT <= 0 || Math.random() < 0.5)) choice = pick(tasty);
     else if (pool.length) { const others = pool.filter(g => g.i !== a.slot); choice = pick(others.length ? others : pool); }
-    if (sp.kind === 'lake') { a.slot = -1; a.onLand = !!sp.amphibious && Math.random() < 0.4; a.tx = a.onLand ? rand(WORLD.LAKE_X - 190, WORLD.LAKE_X - 50) : zoneX(sp); if (a.sp === 'fish') a.depth = rand(8, 28); return; }
+    if (sp.kind === 'lake') { a.slot = -1; a.onLand = !!sp.amphibious && Math.random() < 0.4; a.tx = a.onLand ? rand(WORLD.LAKE_X - 190, WORLD.LAKE_X - 50) : zoneX(sp); if (a.sp === 'fish') a.depth = rand(8, 48); return; }
     if (sp.kind === 'ground') {
       a.ty = GY; a.pad = null;
       if (a.sp === 'armadillo') a.rolling = Math.random() < 0.6;
@@ -552,6 +552,7 @@
     Draw.drawLakeBasin(ctx);
     Draw.drawCliff(ctx);
     Draw.drawWater(ctx, S.lake, t);
+    Draw.drawSeaweed(ctx, S.lake, t);
     Draw.drawDam(ctx, S.dam.stage, S.lake, t, S.dam.stage ? clamp((S.lake - RULES.beaver.spillAt) / (1 - RULES.beaver.spillAt), 0, 1) : 0);
     Draw.drawFalls(ctx, S.lake, t);
     WORLD.LILY_PADS.forEach((px, i) => Draw.drawLilyPad(ctx, px, Draw.waterY(S.lake), t, i));
@@ -699,7 +700,7 @@
   function hitTest(x, y) {
     const inBB = bb => bb && x >= bb.x && x <= bb.x + bb.w && y >= bb.y && y <= bb.y + bb.h;
     const half = i => isWaterSlot(i) ? 36 : WORLD.SLOT_DX / 2;
-    const near = (i, by) => Math.abs(x - slotX(i)) <= half(i) && y > by - 70 && y < by + 44;
+    const near = (i, by) => Math.abs(x - slotX(i)) <= half(i) && y > by - 70 && y < by + 60;
     // with a seed picked, an empty spot wins over an animal swimming or standing on it
     if (selectedSeed && S.seeds[selectedSeed]) {
       for (let i = 0; i < TOTAL_SLOTS; i++) if (slotOpen(i) && !S.plants[i] && seedFits(selectedSeed, i) && near(i, slotY(i))) return { type: 'empty', i };
@@ -711,7 +712,7 @@
     if (cands.length) return cands.sort((u, v) => u.d - v.d)[0];
     if (Math.abs(x - WORLD.CAVE_X) <= 60 && y > GY - 100 && y < GY + 10) return { type: 'cave' };
     for (let k = 0; k < S.sticks.length; k++) if (Math.abs(x - S.sticks[k].x) <= 16 && y > GY - 18 && y < GY + 14) return { type: 'stick', k, bb: { x: S.sticks[k].x - 14, y: GY - 10, w: 28, h: 18 } };
-    if (S.dam.stage && Math.abs(x - WORLD.DAM_X) <= 22 && y > GY - 40 && y < GY + 80) return { type: 'dam' };
+    if (S.dam.stage && Math.abs(x - WORLD.DAM_X) <= 22 && y > GY - 40 && y < GY + WORLD.LAKE_FLOOR) return { type: 'dam' };
     const sm = Draw.sunMoonPos(phase());
     if (Math.hypot(x - sm.x, y - sm.y) <= 48) return { type: 'sky', sun: sm.sun, body: sm.sun ? S.sun : S.moon, bb: { x: sm.x - 40, y: sm.y - 40, w: 80, h: 80 } };
     for (let i = 0; i < TOTAL_SLOTS; i++) {
@@ -772,7 +773,7 @@
     const x = slotX(h.i), by = slotY(h.i);
     if (h.type === 'plant') { const r = Math.max(24, h.m.R + 10); return { x: x - r, y: by + h.m.topY - 10, w: r * 2, h: -h.m.topY + 20 }; }
     if (h.type === 'bush') return { x: x - 28, y: GY - 48, w: 56, h: 58 };
-    return { x: x - 26, y: by - 40, w: 52, h: 50 };
+    return { x: x - 26, y: by - 40, w: 52, h: isWaterSlot(h.i) ? 90 : 92 };
   }
   function drawHover(h, t) {
     if (h.type === 'falls' || h.type === 'cave' || h.type === 'dam') return;

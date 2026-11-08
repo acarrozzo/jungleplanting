@@ -2,14 +2,15 @@
 // Everything about plants, animals, colors and accessories lives here so it's easy to tweak.
 
 const WORLD = {
-  W: 1780, H: 560, GROUND_Y: 430,
+  W: 1900, H: 560, GROUND_Y: 430,
+  LAKE_FLOOR: 115,        // how far below the ground the lake bottom is
   CAVE_X: 85,             // the cave on the left; bats sleep in it by day, the bear at night
-  LAKE_X: 1330,           // where the lake basin starts
-  SLOT_X0: 200, SLOT_DX: 72, MAX_SLOTS: 16, // 16 spots, 72 apart so neighbouring trees overlap less
-  LAKE_SLOTS: [1420, 1495, 1570], // x positions of the floating water-plant spots
-  LILY_PADS: [1380, 1458, 1532],  // decorative pads frogs hop onto
-  DAM_X: 1690,            // where the beaver builds the dam
-  FALLS_X: 1738,          // the waterfall cliff starts here
+  LAKE_X: 1450,           // where the lake basin starts
+  SLOT_X0: 200, SLOT_DX: 80, MAX_SLOTS: 16, // 16 spots, 80 apart so neighbouring trees overlap less
+  LAKE_SLOTS: [1540, 1615, 1690], // x positions of the floating water-plant spots
+  LILY_PADS: [1500, 1578, 1652],  // decorative pads frogs hop onto
+  DAM_X: 1810,            // where the beaver builds the dam
+  FALLS_X: 1858,          // the waterfall cliff starts here
   DAY: 180, NIGHT: 90,    // seconds (3 minute day, 1.5 minute night)
 };
 WORLD.CYCLE = WORLD.DAY + WORLD.NIGHT;
