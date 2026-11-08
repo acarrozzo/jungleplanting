@@ -15,27 +15,26 @@
   const CLEAR_COST = RULES.slots.clearCost;
 
   const GY = WORLD.GROUND_Y;
-  const WATER0 = WORLD.MAX_SLOTS, ISLAND0 = WORLD.MAX_SLOTS + WORLD.LAKE_SLOTS.length;
-  const TOTAL_SLOTS = ISLAND0 + WORLD.ISLAND_SLOTS.length;
+  const WATER0 = WORLD.MAX_SLOTS;
+  const TOTAL_SLOTS = WATER0 + WORLD.LAKE_SLOTS.length;
   let S = null;
   // camera: base scale from the screen size, zoom on top, x scroll and a vertical nudge (oy)
   const cam = { x: 0, oy: 0, zoom: 1, base: 1, scale: 1, offY: 0, viewW: 0, targetX: null };
   let W = 0, H = 0, dpr = 1;
   let particles = [], floaters = [], drops = [];
   let rainVis = 0, highlightT = 0, selectedSeed = null, scrollDir = 0;
-  let hover = null, focus = null, paused = false; const mouse = { sx: 0, sy: 0, active: false };
+  let hover = null, focus = null, paused = false, watch = null, lastInput = 0, ripples = [], photoT = 0; const mouse = { sx: 0, sy: 0, active: false };
   let saveT = 0, hudT = 0, ambientT = 6, lastFrame = performance.now();
   let sheetOpen = false, sheetDismissable = false;
 
-  const isWaterSlot = i => i >= WATER0 && i < ISLAND0;
-  const isIslandSlot = i => i >= ISLAND0;
-  const slotX = i => isWaterSlot(i) ? WORLD.LAKE_SLOTS[i - WATER0] : isIslandSlot(i) ? WORLD.ISLAND_SLOTS[i - ISLAND0] : WORLD.SLOT_X0 + i * WORLD.SLOT_DX;
-  const slotY = i => isWaterSlot(i) ? Draw.waterY(S.lake) : isIslandSlot(i) ? WORLD.ISLAND_Y : GY;
-  const islandBuilt = () => S.dam.stage >= 4;
-  const slotOpen = i => isWaterSlot(i) || (isIslandSlot(i) ? islandBuilt() : i < S.slotsOpen);
+  const isWaterSlot = i => i >= WATER0;
+  const slotX = i => isWaterSlot(i) ? WORLD.LAKE_SLOTS[i - WATER0] : WORLD.SLOT_X0 + i * WORLD.SLOT_DX;
+  const slotY = i => isWaterSlot(i) ? Draw.waterY(S.lake) : GY;
+  const slotOpen = i => isWaterSlot(i) || i < S.slotsOpen;
   const seedFits = (id, i) => (PLANTS[id].kind === 'water') === isWaterSlot(i);
   const lakeFloor = () => Math.max(RULES.rain.lakeFloor, RULES.beaver.floorByStage[Math.min(S.dam.stage, 3)] || 0);
-  const damCost = () => S.dam.stage < 3 ? RULES.beaver.sticksPerStage : RULES.beaver.islandSticks;
+  const damCost = () => RULES.beaver.sticksPerStage;
+  const damDone = () => S.dam.stage >= RULES.beaver.maxStage;
   const dayNum = () => Math.floor(S.t / WORLD.CYCLE) + 1;
   const phase = () => S.t % WORLD.CYCLE;
   const isNight = () => phase() >= WORLD.DAY;
@@ -57,7 +56,7 @@
       rain: { on: false, left: 0, next: rand(...RULES.rain.firstGap) },
       seeds, unlocked, plants: Array(TOTAL_SLOTS).fill(null),
       people: [], animals: [], queue: [],
-      muted: false, started: false, slotsOpen: RULES.slots.start, spawnT: 20, seedlessT: 0, needSeeds: false,
+      muted: false, started: false, follow: true, slotsOpen: RULES.slots.start, spawnT: 20, seedlessT: 0, needSeeds: false,
       stats: { planted: 0, seedsGot: 0, grown: 0 }, tips: { controls: true, plants: true },
       sun: { name: 'Sunny', c1: '#ffd84a', c2: '#fff2a8', acc: 'none' }, moon: { name: 'Luna', c1: '#f2f4ff', c2: '#d6dbf0', acc: 'none' },
       dam: { stage: 0 }, wood: 0, sticks: [], stickT: 20,
@@ -74,7 +73,10 @@
       s.animals = (s.animals || []).filter(a => ANIMALS[a.sp]);
       s.people = s.people || []; s.queue = s.queue || []; s.stats = s.stats || { planted: 0, seedsGot: 0, grown: 0 }; s.tips = s.tips || {};
       s.slotsOpen = Math.min(s.slotsOpen || RULES.slots.start, WORLD.MAX_SLOTS);
-      s.dam = s.dam || { stage: 0 }; s.wood = s.wood || 0; s.sticks = s.sticks || []; s.stickT = s.stickT || 20;
+      if (s.follow === undefined) s.follow = true;
+      s.dam = s.dam || { stage: 0 }; s.dam.stage = Math.min(s.dam.stage, RULES.beaver.maxStage); s.wood = s.wood || 0;
+      // plants beyond the slot list (the old island) go back into the seed pocket
+      s.plants = s.plants || []; s.plants.slice(TOTAL_SLOTS).forEach(p => { if (p) s.seeds[p.id] = (s.seeds[p.id] || 0) + 1; }); s.plants.length = Math.min(s.plants.length, TOTAL_SLOTS); s.sticks = s.sticks || []; s.stickT = s.stickT || 20;
       s.sun = s.sun || { name: 'Sunny', c1: '#ffd84a', c2: '#fff2a8', acc: 'none' }; s.moon = s.moon || { name: 'Luna', c1: '#f2f4ff', c2: '#d6dbf0', acc: 'none' };
       for (const a of s.animals) { a.anim = a.anim || 0; if (a.state === 'eating') a.state = 'idle'; a.bb = null; }
       for (const p of s.people) { p.anim = 0; p.moving = false; p.planting = false; if (p.task && (p.task.type === 'planting' || p.task.type === 'clearing')) p.task.type = p.task.type === 'planting' ? 'plant' : 'clear'; }
@@ -126,9 +128,26 @@
   function worldTransform() { ctx.setTransform(dpr * cam.scale, 0, 0, dpr * cam.scale, -cam.x * cam.scale * dpr, cam.offY * dpr); }
   function toWorld(sx, sy) { return { x: sx / cam.scale + cam.x, y: (sy - cam.offY) / cam.scale }; }
   function updateCamera(dt) {
+    if (watch) { const e = watch.a || watch.pe; if ((watch.a && (watch.a.state === 'away' || !S.animals.includes(watch.a))) || (watch.pe && !S.people.includes(watch.pe))) stopWatch(); else { cam.x += (clamp(e.x - cam.viewW / 2, 0, Math.max(0, WORLD.W - cam.viewW)) - cam.x) * Math.min(1, dt * 4); applyCam(); } }
     if (scrollDir) { cam.x += scrollDir * cam.viewW * 1.1 * dt; cam.targetX = null; applyCam(); }
     if (cam.targetX != null) { cam.x += (cam.targetX - cam.x) * Math.min(1, dt * 7); if (Math.abs(cam.targetX - cam.x) < 1) { cam.x = cam.targetX; cam.targetX = null; } applyCam(); }
     $('btnLeft').disabled = cam.x <= 0.5; $('btnRight').disabled = cam.x >= WORLD.W - cam.viewW - 0.5;
+  }
+
+  // ---------- watch an entity / follow the action ----------
+  function watchEntity(ent, isPerson) {
+    watch = isPerson ? { pe: ent } : { a: ent }; cam.targetX = null;
+    setZoom(Math.max(cam.zoom, 1.7), W / 2, H * 0.6);
+    $('watchPill').textContent = `👀 Watching ${ent.name} · tap to stop`; $('watchPill').classList.remove('hidden');
+    Sound.play('chime');
+  }
+  function stopWatch() { if (!watch) return; watch = null; $('watchPill').classList.add('hidden'); }
+  $('watchPill').onclick = () => { Sound.play('click'); stopWatch(); };
+  const userTouched = () => { lastInput = performance.now(); stopWatch(); };
+  // glide the camera to something that just happened, unless the kid is in the middle of doing something
+  function followEvent(x) {
+    if (!S.follow || sheetOpen || selectedSeed || ptr || pinch || scrollDir || watch || paused || performance.now() - lastInput < 4000) return;
+    cam.targetX = clamp(x - cam.viewW / 2, 0, Math.max(0, WORLD.W - cam.viewW));
   }
 
   // ---------- people ----------
@@ -170,7 +189,7 @@
         free[0].task = { type: 'clear', tx };
         toast(`${free[0].name} is off to clear some jungle! 🌿`, 2500);
       } else {
-        const far = isWaterSlot(q.slot) || isIslandSlot(q.slot), tx = far ? WORLD.LAKE_X - 30 : slotX(q.slot);
+        const far = isWaterSlot(q.slot), tx = far ? WORLD.LAKE_X - 30 : slotX(q.slot);
         free.sort((a, b) => Math.abs(a.x - tx) - Math.abs(b.x - tx));
         const pe = free[0];
         pe.task = { type: 'plant', tx: far ? tx : tx + (tx > pe.x ? -20 : 20), slot: q.slot, id: q.id };
@@ -242,6 +261,7 @@
     S.animals.push(a);
     Sound.play('chime'); if (sp.sound) setTimeout(() => Sound.play(sp.sound), 450);
     toast(`${sp.name === 'Fireflies' ? '✨ Fireflies have' : 'A ' + sp.name + ' has'} arrived!`, 8000, { big: true, action: { label: 'Name it! ✏️', fn: () => showAnimalSheet(a) } });
+    followEvent(a.tx || a.x);
     return a;
   }
   function trySpawn() {
@@ -260,9 +280,9 @@
   function chooseTarget(a) {
     const sp = ANIMALS[a.sp];
     const grown = grownPlants();
-    let pool = grown.filter(g => g.d.kind !== 'water' && !isIslandSlot(g.i));
+    let pool = grown.filter(g => g.d.kind !== 'water');
     if (sp.kind === 'bird') pool = grown.filter(g => g.d.kind === 'tree');
-    if (sp.kind === 'climber') pool = grown.filter(g => g.d.kind === 'tree' && !isIslandSlot(g.i));
+    if (sp.kind === 'climber') pool = grown.filter(g => g.d.kind === 'tree');
     if (sp.kind === 'bug' || sp.kind === 'glow') { pool = grown.filter(g => g.d.kind === 'flower' || (g.d.kind === 'water' && Math.random() < 0.3)); if (!pool.length) pool = grown.filter(g => g.d.kind === 'flower' || g.d.kind === 'water'); }
     const tasty = pool.filter(g => g.p.fruit > 0 && sp.eats.includes(g.p.id));
     let choice = null;
@@ -375,7 +395,7 @@
   // ---------- beaver: collects sticks, builds the dam in stages, then the island ----------
   function beaverDecide(a) {
     if (S.sticks.length) { const st = S.sticks.reduce((b, s) => Math.abs(s.x - a.x) < Math.abs(b.x - a.x) ? s : b); a.state = 'fetch'; a.tx = st.x; a.ty = GY; a.slot = -1; return true; }
-    if (S.dam.stage < 4 && S.wood >= damCost()) { a.state = 'toDam'; a.tx = WORLD.DAM_X - 30; a.ty = Draw.waterY(S.lake) + 3; a.slot = -1; return true; }
+    if (!damDone() && S.wood >= damCost()) { a.state = 'toDam'; a.tx = WORLD.DAM_X - 30; a.ty = Draw.waterY(S.lake) + 3; a.slot = -1; return true; }
     return false;
   }
   function updateBeaver(a, dt) {
@@ -404,9 +424,9 @@
   }
   function buildDam(who) {
     S.dam.stage++; Sound.play('fanfare'); sparkle(WORLD.DAM_X, Draw.waterY(S.lake) - 20, '#ffd21f');
-    const msgs = [null, `🦫 ${who} started the dam! The lake will not drop below ${Math.round(lakeFloor() * 100)}% now.`, `🦫 The dam is getting taller! Lake floor is ${Math.round(lakeFloor() * 100)}%.`, `🦫 The dam is finished! The lake stays at least ${Math.round(lakeFloor() * 100)}% full. ${RULES.beaver.islandSticks} more sticks and ${who} will build an island!`, `🏝️ ${who} built a little island! Two new planting spots in the lake.`];
-    toast(msgs[Math.min(S.dam.stage, 4)], 7000, { big: true });
-    if (S.dam.stage >= 4) { WORLD.ISLAND_SLOTS.forEach((x, k) => sparkle(x, WORLD.ISLAND_Y - 10, '#fff')); }
+    const msgs = [null, `🦫 ${who} started the dam! The lake will not drop below ${Math.round(lakeFloor() * 100)}% now.`, `🦫 The dam is getting taller! Lake floor is ${Math.round(lakeFloor() * 100)}%.`, `🦫 The dam is finished! The lake stays at least ${Math.round(lakeFloor() * 100)}% full, and it spills over when the lake is full.`];
+    toast(msgs[Math.min(S.dam.stage, 3)], 7000, { big: true });
+    followEvent(WORLD.DAM_X);
     updateHud(); save();
   }
   function anyFoodPlanted(sp) { return S.plants.some(p => p && !p.pending && p.progress >= 1 && sp.eats.includes(p.id)); }
@@ -431,6 +451,7 @@
     if (!S.unlocked.includes(seed)) {
       S.unlocked.push(seed); Sound.play('fanfare');
       toast(`🎉 NEW SEED! ${who} brought you a ${d.name} seed!${d.kind === 'water' ? ' It grows on the floating spots in the lake.' : ''}`, 7000, { big: true });
+      followEvent(x);
     } else { Sound.play('seed'); toast(`🌱 ${who} brought you a ${d.name} seed!`, 3500); }
     floaters.push({ x, y, text: d.emoji + ' seed', life: 2 });
     sparkle(x, y, '#ffd21f');
@@ -449,6 +470,7 @@
     for (const p of particles) { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 160 * dt; }
     particles = particles.filter(p => p.life > 0);
     for (const f of floaters) { f.life -= dt; f.y -= 25 * dt; }
+    for (const r of ripples) r.t += dt; ripples = ripples.filter(r => r.t < 0.45);
     floaters = floaters.filter(f => f.life > 0);
     rainVis = clamp(rainVis + (S.rain.on ? dt / 2 : -dt / 2), 0, 1);
     const want = Math.round(140 * rainVis);
@@ -489,7 +511,7 @@
     S.spawnT -= dt; if (S.spawnT <= 0) { S.spawnT = RULES.animals.spawnEvery; trySpawn(); }
     for (const a of S.animals) updateAnimal(a, dt);
 
-    if (S.dam.stage < 4 && S.animals.some(a => a.sp === 'beaver') && S.sticks.length < RULES.beaver.maxSticks) {
+    if (!damDone() && S.animals.some(a => a.sp === 'beaver') && S.sticks.length < RULES.beaver.maxSticks) {
       S.stickT -= dt;
       if (S.stickT <= 0) { S.stickT = RULES.beaver.stickEvery; const trees = grownPlants().filter(g => g.d.kind === 'tree' && g.i < WORLD.MAX_SLOTS); if (trees.length) { const g = pick(trees); S.sticks.push({ x: slotX(g.i) + rand(-34, 34), r: rand(-0.5, 0.5) }); Sound.play('pop'); } }
     }
@@ -525,7 +547,6 @@
     Draw.drawLakeBasin(ctx);
     Draw.drawCliff(ctx);
     Draw.drawWater(ctx, S.lake, t);
-    Draw.drawIsland(ctx, islandBuilt(), t);
     Draw.drawDam(ctx, S.dam.stage, S.lake, t, S.dam.stage ? clamp((S.lake - RULES.beaver.spillAt) / (1 - RULES.beaver.spillAt), 0, 1) : 0);
     Draw.drawFalls(ctx, S.lake, t);
     WORLD.LILY_PADS.forEach((px, i) => Draw.drawLilyPad(ctx, px, Draw.waterY(S.lake), t, i));
@@ -536,7 +557,6 @@
     const hl = selectedSeed ? (PLANTS[selectedSeed].kind === 'water' ? 'water' : 'land') : null;
     for (let i = 0; i < TOTAL_SLOTS; i++) {
       const water = isWaterSlot(i);
-      if (isIslandSlot(i) && !slotOpen(i)) continue;
       if (!slotOpen(i)) { if (isHover('bush', i)) drawGlow(hoverBox(hover), c => Draw.drawBush(c, slotX(i), t), t); Draw.drawBush(ctx, slotX(i), t); continue; }
       const p = S.plants[i], x = slotX(i), y = slotY(i);
       if (isHover(p ? 'plant' : 'empty', i)) drawGlow(hoverBox(hover), c => { if (!p || p.pending) { if (water) Draw.drawWaterSpot(c, x, y, t, 0); else Draw.drawMound(c, x, 0); if (!p) Draw.drawPlantButton(c, x, y, t, false); } else Draw.drawPlant(c, x, y, PLANTS[p.id], p, t, night); }, t);
@@ -563,6 +583,7 @@
 
     if (hover) drawHover(hover, t);
     drawFocus(t);
+    for (const r of ripples) { const k = r.t / 0.45; ctx.globalAlpha = (1 - k) * 0.8; ctx.strokeStyle = '#fff'; ctx.lineWidth = 3 * (1 - k) + 1; ctx.beginPath(); ctx.arc(r.x, r.y, 6 + 30 * k, 0, Math.PI * 2); ctx.stroke(); } ctx.globalAlpha = 1;
     for (const f of floaters) { ctx.globalAlpha = Math.min(1, f.life); ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 3; ctx.strokeText(f.text, f.x, f.y); ctx.fillText(f.text, f.x, f.y); ctx.globalAlpha = 1; }
     for (const p of particles) { ctx.globalAlpha = Math.min(1, p.life * 2); Draw.circ(ctx, p.x, p.y, p.r, p.color); }
     ctx.globalAlpha = 1;
@@ -572,6 +593,7 @@
     if (night > 0) { ctx.fillStyle = `rgba(10,15,45,${0.45 * night})`; ctx.fillRect(0, 0, W, H); }
     worldTransform();
     for (const a of S.animals) if (ANIMALS[a.sp].kind === 'glow' && a.state !== 'away') { Draw.drawFireflies(ctx, a, t); a.bb = { x: a.x - 50, y: a.y - 60, w: 100, h: 70 }; }
+    if (photoT) { ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; const txt = `🌴 Jungle Planting · Day ${dayNum()}`; ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.strokeText(txt, W - 16, H - 14); ctx.fillStyle = '#fff'; ctx.fillText(txt, W - 16, H - 14); }
   }
   // c = context to draw on (the glow pass uses an offscreen one); plain = critter only, no tag or Zzz
   function drawAnimal(a, t, c = ctx, plain = false) {
@@ -621,11 +643,11 @@
     try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
     if (pointers.size === 2) {
       const [p1, p2] = [...pointers.values()];
-      pinch = { d0: Math.hypot(p1.x - p2.x, p1.y - p2.y), zoom0: cam.zoom, mx: (p1.x + p2.x) / 2, my: (p1.y + p2.y) / 2 };
+      pinch = { d0: Math.hypot(p1.x - p2.x, p1.y - p2.y), zoom0: cam.zoom, mx: (p1.x + p2.x) / 2, my: (p1.y + p2.y) / 2 }; userTouched();
       ptr = null; return;
     }
     ptr = { x: e.clientX, y: e.clientY, cx: cam.x, oy: cam.oy, moved: false, id: e.pointerId };
-    cam.targetX = null;
+    cam.targetX = null; lastInput = performance.now();
   });
   canvas.addEventListener('pointermove', e => {
     if (e.pointerType === 'mouse') { mouse.sx = e.clientX; mouse.sy = e.clientY; mouse.active = true; }
@@ -640,23 +662,23 @@
     if (!ptr || e.pointerId !== ptr.id) return;
     const dx = e.clientX - ptr.x, dy = e.clientY - ptr.y;
     if (Math.abs(dx) > 8 || Math.abs(dy) > 8) ptr.moved = true;
-    if (ptr.moved) { cam.x = ptr.cx - dx / cam.scale; cam.oy = ptr.oy + dy; applyCam(); }
+    if (ptr.moved) { stopWatch(); cam.x = ptr.cx - dx / cam.scale; cam.oy = ptr.oy + dy; applyCam(); }
   });
   function pointerEnd(e) {
     pointers.delete(e.pointerId);
     if (pinch) { if (pointers.size < 2) pinch = null; return; }
     if (!ptr || e.pointerId !== ptr.id) return;
-    if (!ptr.moved && e.type === 'pointerup') onTap(e.clientX, e.clientY);
+    if (!ptr.moved && e.type === 'pointerup') { const wp = toWorld(e.clientX, e.clientY); ripples.push({ x: wp.x, y: wp.y, t: 0 }); onTap(e.clientX, e.clientY); }
     ptr = null;
   }
   canvas.addEventListener('pointerup', pointerEnd);
   canvas.addEventListener('pointercancel', pointerEnd);
-  canvas.addEventListener('wheel', e => { e.preventDefault(); Sound.init(); setZoom(cam.zoom * (e.deltaY < 0 ? 1.1 : 0.9), e.clientX, e.clientY); }, { passive: false });
+  canvas.addEventListener('wheel', e => { e.preventDefault(); Sound.init(); userTouched(); setZoom(cam.zoom * (e.deltaY < 0 ? 1.1 : 0.9), e.clientX, e.clientY); }, { passive: false });
 
   // on-screen buttons: hold to keep scrolling, tap to hop half a screen
   function holdScroll(btn, dir) {
     let downAt = 0;
-    btn.addEventListener('pointerdown', e => { e.preventDefault(); Sound.init(); Sound.resume(); downAt = performance.now(); scrollDir = dir; try { btn.setPointerCapture(e.pointerId); } catch (err) {} });
+    btn.addEventListener('pointerdown', e => { e.preventDefault(); Sound.init(); Sound.resume(); downAt = performance.now(); scrollDir = dir; userTouched(); try { btn.setPointerCapture(e.pointerId); } catch (err) {} });
     const end = () => { if (!scrollDir) return; const held = performance.now() - downAt; scrollDir = 0; if (held < 220) { cam.targetX = clamp(cam.x + dir * cam.viewW * 0.5, 0, Math.max(0, WORLD.W - cam.viewW)); Sound.play('click'); } };
     btn.addEventListener('pointerup', end); btn.addEventListener('pointercancel', end); btn.addEventListener('lostpointercapture', end);
   }
@@ -665,8 +687,8 @@
   $('btnPause').onclick = () => { Sound.init(); Sound.play('click'); setPaused(!paused); };
   $('btnResume').onclick = () => { Sound.play('chime'); setPaused(false); };
   document.addEventListener('visibilitychange', () => { if (document.hidden && S && S.started) setPaused(true); });
-  $('btnZoomIn').onclick = () => { Sound.init(); Sound.play('click'); setZoom(cam.zoom * 1.3); };
-  $('btnZoomOut').onclick = () => { Sound.init(); Sound.play('click'); setZoom(cam.zoom / 1.3); };
+  $('btnZoomIn').onclick = () => { Sound.init(); Sound.play('click'); userTouched(); setZoom(cam.zoom * 1.3); };
+  $('btnZoomOut').onclick = () => { Sound.init(); Sound.play('click'); userTouched(); setZoom(cam.zoom / 1.3); };
 
   function hitTest(x, y) {
     const inBB = bb => bb && x >= bb.x && x <= bb.x + bb.w && y >= bb.y && y <= bb.y + bb.h;
@@ -713,7 +735,7 @@
       case 'sky': showSkySheet(h.sun); break;
       case 'lake': toast(`💧 The lake is ${Math.round(S.lake * 100)}% full. Rain fills it up! Water lilies grow on the floating spots.`); break;
       case 'stick': collectStick(h.k, 'You'); break;
-      case 'dam': toast(S.dam.stage >= 4 ? '🦫 The dam and the island are done! The lake never drops below ' + Math.round(lakeFloor() * 100) + '%.' : `🦫 Dam stage ${S.dam.stage} of 3. The beaver needs ${damCost()} sticks for the next bit (you have ${S.wood}). Tap sticks under the trees!`); break;
+      case 'dam': toast(damDone() ? '🦫 The dam is done! The lake never drops below ' + Math.round(lakeFloor() * 100) + '%.' : `🦫 Dam stage ${S.dam.stage} of 3. The beaver needs ${damCost()} sticks for the next bit (you have ${S.wood}). Tap sticks under the trees!`); break;
       case 'cave': { const inside = S.animals.filter(a => ANIMALS[a.sp].home === 'cave' && a.state === 'sleep').map(a => a.name); toast(inside.length ? `🕳️ Shh! ${inside.join(' and ')} ${inside.length > 1 ? 'are' : 'is'} sleeping in the cave.` : '🕳️ The cave. Bats sleep here by day and the bear sleeps here at night.'); break; }
       case 'falls': Sound.play('splash'); toast('🌊 The waterfall! Frogs love hopping on the lily pads below it.'); break;
     }
@@ -783,7 +805,7 @@
     $('weather').textContent = S.rain.on ? '🌧️' : (isNight() ? '🌙' : '☀️');
     $('lakeLabel').textContent = '💧 ' + Math.round(S.lake * 100) + '%';
     const showWood = S.wood > 0 || S.sticks.length > 0 || S.animals.some(a => a.sp === 'beaver');
-    $('woodLabel').style.display = showWood && S.dam.stage < 4 ? '' : 'none'; $('woodLabel').textContent = `🪵 ${S.wood}/${damCost()}`;
+    $('woodLabel').style.display = showWood && !damDone() ? '' : 'none'; $('woodLabel').textContent = `🪵 ${S.wood}/${damCost()}`;
     $('btnSound').textContent = S.muted ? '🔇' : '🔊';
   }
   function renderSeedBar() {
@@ -807,19 +829,41 @@
     if (water.length) { group('🌱 land', land); group('💧 lake', water); } else land.forEach(addChip);
   }
 
+  // ---------- "What now?" helper ----------
+  function whatNow() {
+    Sound.init(); Sound.play('click'); stopWatch();
+    const go = (x, msg, opts) => { cam.targetX = clamp(x - cam.viewW / 2, 0, Math.max(0, WORLD.W - cam.viewW)); lastInput = performance.now(); toast('💡 ' + msg, 6000, Object.assign({ big: true }, opts || {})); };
+    if (S.sticks.length) { const st = S.sticks[0]; focus = null; return go(st.x, 'Pick up the sticks under the trees for the beaver!'); }
+    const un = S.animals.find(a => !a.named && a.state !== 'away'); if (un && Math.random() < 0.5) return go(un.x, `A ${ANIMALS[un.sp].name} is waiting for a name!`, { action: { label: 'Name it ✏️', fn: () => showAnimalSheet(un) } });
+    for (let i = 0; i < TOTAL_SLOTS; i++) if (slotOpen(i) && !S.plants[i] && S.unlocked.some(k => S.seeds[k] > 0 && seedFits(k, i))) { focusSlot(i); return go(slotX(i), isWaterSlot(i) ? 'A lake spot is free. Plant a water lily!' : 'An empty spot! Tap the ➕ to plant a seed.'); }
+    for (let i = 0; i < TOTAL_SLOTS; i++) { const p = S.plants[i]; if (p && !p.pending && p.progress >= 1 && (p.level || 1) < MAX_LEVEL && (S.seeds[p.id] || 0) >= upgradeCost(p)) { focusSlot(i); return go(slotX(i), `You have enough ${PLANTS[p.id].emoji} seeds to make this ${PLANTS[p.id].name} bigger!`); } }
+    if (un) return go(un.x, `A ${ANIMALS[un.sp].name} is waiting for a name!`, { action: { label: 'Name it ✏️', fn: () => showAnimalSheet(un) } });
+    if (S.slotsOpen < WORLD.MAX_SLOTS && S.unlocked.some(k => PLANTS[k].kind !== 'water' && (S.seeds[k] || 0) >= CLEAR_COST)) return go(slotX(S.slotsOpen), `Tap the thick jungle to clear a new spot for ${CLEAR_COST} seeds.`);
+    const growing = S.plants.filter(p => p && !p.pending && p.progress < 1).length;
+    if (growing) return go(slotX(S.plants.findIndex(p => p && !p.pending && p.progress < 1)), `${growing} plant${growing === 1 ? ' is' : 's are'} growing. Watch the animals while you wait!`);
+    if (totalSeeds() === 0) return go(cam.x + cam.viewW / 2, 'No seeds right now. Animals bring seeds when they eat fruit. Watch them munch!');
+    go(cam.x + cam.viewW / 2, 'Everything is growing nicely! Try zooming in on an animal, or dress up the sun.');
+  }
+  $('btnHint').onclick = whatNow;
+
+  // ---------- photo ----------
+  function takePhoto() {
+    Sound.play('click'); photoT = 1; closeSheet();
+    draw();
+    const a = document.createElement('a'); a.download = `jungle-planting-day-${dayNum()}.png`; a.href = canvas.toDataURL('image/png'); document.body.appendChild(a); a.click(); a.remove();
+    const flash = $('flash'); flash.classList.remove('hidden'); setTimeout(() => flash.classList.add('hidden'), 350);
+    toast('📸 Snap! Your jungle picture is saved.', 3500);
+    setTimeout(() => { photoT = 0; }, 400);
+  }
+
   // ---------- seed tooltips (mouse) ----------
   function fmtTime(sec) { return sec >= 60 ? `${Math.round(sec / 60 * 10) / 10} min`.replace('.0 ', ' ') : `${sec} s`; }
   function seedTip(k) {
-    const d = PLANTS[k], n = S.seeds[k] || 0;
-    const fans = Object.values(ANIMALS).filter(a => a.eats.includes(k)).map(a => a.name);
-    const from = Object.values(ANIMALS).filter(a => a.brings.includes(k)).map(a => a.name);
-    const planted = S.plants.filter(p => p && p.id === k).length, grownUp = S.plants.find(p => p && p.id === k && p.progress >= 1 && (p.level || 1) < MAX_LEVEL);
-    const lines = [`<b>${d.emoji} ${d.name}</b>`, `${d.kind === 'water' ? '🪷 Grows on a lake spot' : d.kind === 'tree' ? '🌳 A tree for a dirt spot' : '🌸 A flower for a dirt spot'} · ready in ${fmtTime(d.grow)}`];
-    lines.push(d.fruit ? `🍽️ ${d.fruit.name} every ${d.fruit.interval}s, up to ${d.fruit.max}` : '🌿 No fruit, but animals count it as a tree');
-    if (fans.length) lines.push(`❤️ Loved by ${fans.join(', ')}`);
-    lines.push(from.length ? `🎁 Brought by ${from.join(', ')}` : '🌱 One of your starter seeds');
-    lines.push(`👜 You have ${n}${planted ? ` · ${planted} planted` : ''}${grownUp && n >= upgradeCost(grownUp) ? ' · ⬆️ enough to upgrade one!' : ''}`);
-    return lines.join('<br>');
+    const d = PLANTS[k], mine = S.plants.filter(p => p && p.id === k);
+    if (!mine.length) return `<b>${d.emoji} ${d.name}</b><br>None planted yet`;
+    const byLevel = {}; for (const p of mine) byLevel[p.level || 1] = (byLevel[p.level || 1] || 0) + 1;
+    const levels = Object.keys(byLevel).sort().map(l => `<span class="levelstars">${'★'.repeat(l)}${'☆'.repeat(MAX_LEVEL - l)}</span>${byLevel[l] > 1 ? ' ×' + byLevel[l] : ''}`).join('  ');
+    return `<b>${d.emoji} ${d.name}</b><br>${mine.length} planted · ${levels}`;
   }
   function showTip(anchor, html) {
     const tip = $('tip'); tip.innerHTML = html; tip.classList.remove('hidden');
@@ -846,7 +890,7 @@
     const reset = el('button', 'small', '↩️'); reset.title = 'Back to the original look'; reset.onclick = () => { resetLook(target, type); Sound.play('pop'); openSheet(buildCustomizer(target, type, opts), sheetDismissable); };
     inline.append(inp, shuffle, reset); left.appendChild(inline);
     if (type === 'person' && !target.def) target.def = { name: target.name, skin: target.skin, shirt: target.shirt, pants: target.pants, hair: target.hair, acc: target.acc || 'none' };
-    const fields = type === 'person' ? [['skin', 'Skin', SKIN_COLORS], ['shirt', 'Shirt', PEOPLE_COLORS], ['pants', 'Pants', PEOPLE_COLORS], ['hair', 'Hair', HAIR_COLORS]]
+    const fields = type === 'person' ? [['skin', 'Skin', SKIN_COLORS], ['hair', 'Hair', HAIR_COLORS], ['shirt', 'Shirt', PEOPLE_COLORS], ['pants', 'Pants', PEOPLE_COLORS]]
       : type === 'sky' ? [['c1', 'Color', SKY_COLORS], ['c2', 'Glow', SKY_COLORS]]
       : [['c1', 'Color', ANIMAL_COLORS], ['c2', 'Accent', ANIMAL_COLORS]];
     for (const [key, label, cols] of fields) {
@@ -859,6 +903,7 @@
     const accs = el('div', 'accs');
     for (const a of ACCESSORIES) { const b = el('button', 'acc', a.emoji); b.title = a.name; if ((target.acc || 'none') === a.id) b.classList.add('sel'); b.onclick = () => { target.acc = a.id; accs.querySelectorAll('.acc').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); Sound.play('click'); redraw(); }; accs.appendChild(b); }
     arow.appendChild(accs); right.appendChild(arow);
+    if (type !== 'sky') { const wb = el('button', 'big', '👀 Zoom in and watch'); wb.onclick = () => { closeSheet(); watchEntity(target, type === 'person'); }; right.appendChild(wb); }
     if (opts.extra) right.appendChild(opts.extra);
     body.append(left, right); card.appendChild(body);
     const done = el('button', 'big primary', opts.doneLabel || 'Done ✅');
@@ -944,7 +989,7 @@
     const c = el('button', 'big', 'Close'); c.onclick = closeSheet; card.appendChild(c);
     openSheet(card, true);
   }
-  function slotName(i) { return isWaterSlot(i) ? `Lake spot ${i - WATER0 + 1}` : isIslandSlot(i) ? `Island spot ${i - ISLAND0 + 1}` : `Spot ${i + 1}`; }
+  function slotName(i) { return isWaterSlot(i) ? `Lake spot ${i - WATER0 + 1}` : `Spot ${i + 1}`; }
   function showPlantsSheet() {
     const card = el('div', 'card'); card.appendChild(el('h2', null, '🌱 My Plants'));
     const list = []; S.plants.forEach((p, i) => { if (p) list.push({ p, i }); });
@@ -1004,12 +1049,12 @@
     card.appendChild(st);
     card.appendChild(el('h3', null, 'Your people'));
     const pl = el('div', 'booklist');
-    for (const pe of S.people) { const it = el('div', 'bookitem'); const cv = el('canvas'); cv.width = 112; cv.height = 112; const c = cv.getContext('2d'); c.fillStyle = '#dff3d8'; c.fillRect(0, 0, 112, 112); c.save(); c.translate(56, 100); c.scale(1.4, 1.4); Draw.drawPerson(c, 0, 0, pe, { t: 0, face: 1 }); c.restore(); it.appendChild(cv); const tx = el('div', 'txt'); tx.appendChild(el('b', null, pe.name)); tx.appendChild(el('span', null, pe.task && pe.task.type === 'arrive' ? 'On the way!' : 'Explorer')); it.appendChild(tx); const b = el('button', 'small', '✏️'); b.onclick = () => openSheet(buildCustomizer(pe, 'person', { title: `✏️ ${pe.name}` }), true); it.appendChild(b); pl.appendChild(it); }
+    for (const pe of S.people) { const it = el('div', 'bookitem'); const cv = el('canvas'); cv.width = 112; cv.height = 112; const c = cv.getContext('2d'); c.fillStyle = '#dff3d8'; c.fillRect(0, 0, 112, 112); c.save(); c.translate(56, 100); c.scale(1.4, 1.4); Draw.drawPerson(c, 0, 0, pe, { t: 0, face: 1 }); c.restore(); it.appendChild(cv); const tx = el('div', 'txt'); tx.appendChild(el('b', null, pe.name)); tx.appendChild(el('span', null, pe.task && pe.task.type === 'arrive' ? 'On the way!' : 'Explorer')); it.appendChild(tx); const wb = el('button', 'small', '👀'); wb.onclick = () => { closeSheet(); watchEntity(pe, true); }; const b = el('button', 'small', '✏️'); b.onclick = () => openSheet(buildCustomizer(pe, 'person', { title: `✏️ ${pe.name}` }), true); it.append(wb, b); pl.appendChild(it); }
     card.appendChild(pl);
     card.appendChild(el('h3', null, `Animals in your jungle (${S.animals.length})`));
     const al = el('div', 'booklist');
     if (!S.animals.length) al.appendChild(el('p', 'sub', 'No animals yet. Grow some trees and flowers!'));
-    for (const a of S.animals) { const sp = ANIMALS[a.sp]; const it = el('div', 'bookitem'); it.appendChild(miniCanvas(a)); const tx = el('div', 'txt'); tx.appendChild(el('b', null, a.name)); tx.appendChild(el('span', null, sp.name + (a.state === 'away' ? ' · comes back at night' : a.state === 'sleep' ? ' · sleeping' : ''))); it.appendChild(tx); const b = el('button', 'small', '✏️'); b.onclick = () => showAnimalSheet(a); it.appendChild(b); al.appendChild(it); }
+    for (const a of S.animals) { const sp = ANIMALS[a.sp]; const it = el('div', 'bookitem'); it.appendChild(miniCanvas(a)); const tx = el('div', 'txt'); tx.appendChild(el('b', null, a.name)); tx.appendChild(el('span', null, sp.name + (a.state === 'away' ? ' · comes back at night' : a.state === 'sleep' ? ' · sleeping' : ''))); it.appendChild(tx); const wb = el('button', 'small', '👀'); wb.disabled = a.state === 'away'; wb.onclick = () => { closeSheet(); watchEntity(a, false); }; const b = el('button', 'small', '✏️'); b.onclick = () => showAnimalSheet(a); it.append(wb, b); al.appendChild(it); }
     card.appendChild(al);
     const missing = Object.keys(ANIMALS).filter(k => !S.animals.some(a => a.sp === k));
     card.appendChild(el('h3', null, `Still hiding (${missing.length})`));
@@ -1036,8 +1081,10 @@
       <li>🌿 <b>Tap the thick jungle</b> to clear a new spot for ${CLEAR_COST} seeds. A new friend also clears ${RULES.slots.perNewcomer} spots every sunrise (up to ${RULES.people.max} friends).</li>
       <li>🦉 Some animals only come out at night. Day animals sleep.</li>
       <li>✏️ <b>Tap any person or animal</b> to name it and give it colors and a hat. The <b>sun and moon</b> too!</li>
+      <li>💡 Stuck? The yellow 💡 button points you to something fun to do next.</li>
+      <li>👀 On any name card, <b>Zoom in and watch</b> follows that animal or person around. Swipe to stop.</li>
       <li>⏸️ The pause button stops time. The game also pauses by itself when you switch apps.</li>
-      <li>🦫 When the beaver arrives, grown trees drop sticks. <b>Tap sticks</b> (or let the beaver fetch them) and it builds a dam in 3 stages, then an island with 2 new planting spots. A full lake spills over the dam!</li>
+      <li>🦫 When the beaver arrives, grown trees drop sticks. <b>Tap sticks</b> (or let the beaver fetch them) and it builds a dam in 3 stages, and a full lake spills over the dam!</li>
       <li>🐸 Frogs hop onto the lily pads under the waterfall. Bats sleep in the cave by day, and the bear sleeps there at night.</li>
       <li>↩️ The small ↩️ button on a name card puts the look back to how it started (an animal then loses its name tag).</li>
       <li>🖱️ Point at a seed in the bar to see what it grows into and who loves it.</li>
@@ -1045,6 +1092,8 @@
       <li>🖱️ On a computer, point at anything to see what it is before you click.</li>
     </ul>`;
     card.appendChild(how);
+    const photo = el('button', 'big', '📸 Take a picture of the jungle'); photo.onclick = takePhoto; card.appendChild(photo);
+    const fol = el('button', 'big', S.follow ? '📹 Camera follows new arrivals — turn off' : '📹 Camera stays put — turn on'); fol.onclick = () => { S.follow = !S.follow; fol.textContent = S.follow ? '📹 Camera follows new arrivals — turn off' : '📹 Camera stays put — turn on'; Sound.play('click'); save(); }; card.appendChild(fol);
     const dev = el('button', 'big', '🔧 Under the hood (for grown-ups)'); dev.onclick = () => { Sound.play('click'); showDevSheet(); }; card.appendChild(dev);
     const reset = el('button', 'big danger', '🗑️ Start a brand new jungle');
     reset.onclick = () => { if (reset.dataset.arm) { localStorage.removeItem(SAVE_KEY); S = newState(); particles = []; floaters = []; selectedSeed = null; Sound.setRain(false); renderSeedBar(); closeSheet(); showWelcome(); } else { reset.dataset.arm = '1'; reset.textContent = '⚠️ Really start over? Tap again to confirm'; } };
@@ -1064,6 +1113,7 @@
     sec('🌍 World & time', [
       `World is ${WORLD.W}×${WORLD.H} units, ground at y=${WORLD.GROUND_Y}, cave at x=${WORLD.CAVE_X}, lake from x=${WORLD.LAKE_X}, waterfall cliff from x=${WORLD.FALLS_X}. Lily pads at x=${WORLD.LILY_PADS.join(', ')} (frogs hop onto them and onto grown water lilies). ${WORLD.MAX_SLOTS} land spots every ${WORLD.SLOT_DX} units from x=${WORLD.SLOT_X0} to ${landW}, plus ${WORLD.LAKE_SLOTS.length} floating lake spots (water plants only).`,
       `Day ${WORLD.DAY}s + night ${WORLD.NIGHT}s = ${WORLD.CYCLE}s per day. A new jungle starts ${25}s into Day 1. Sunrise = day number changes.`,
+      `Follow-the-action: when an animal arrives, a new seed kind drops or a dam stage finishes, the camera glides there, but not while a sheet is open, a seed is picked, a finger is on the screen, something is being watched, the game is paused, or within 4s of the player moving the camera. Menu toggle to turn it off. Watch mode follows one entity at ≥1.7× zoom until the player swipes or taps the pill.`,
       `Camera: base scale fits the ${WORLD.H}-unit height (or 420 units wide on portrait phones), zoom 0.55–2.4×, drag / ◀ ▶ hold or tap (half-screen hop), pinch, wheel. Zoomed out, the sun and moon climb toward the top of the screen, the backdrop stretches up to 2.3× and plants get up to 30% taller so the jungle fills the view.`,
       `Game time only runs while the page is open and no sheet is showing. Nothing grows while the game is closed. Autosave every ${R.save.every}s and when the tab hides (localStorage key <code>${SAVE_KEY}</code>, v${SAVE_VERSION}).`,
     ]);
@@ -1082,7 +1132,7 @@
     sec('🧑 People', [
       `Start with 1 explorer; one more arrives at each sunrise until ${R.people.max}. Newcomer walks in from the left, clears ${R.slots.perNewcomer} spots and asks for a name and look.`,
       `The sun and moon can be named and dressed up like anyone else; their sheet also has a button that jumps time to the next sunset or sunrise.`,
-      `Beaver: arrives at lake ≥ 70% with 3 grown trees. While it is around and the dam is unfinished, a grown land tree drops a stick every ${R.beaver.stickEvery}s (max ${R.beaver.maxSticks} lying about). Tapping a stick or the beaver fetching it adds 1 wood. Each dam stage costs ${R.beaver.sticksPerStage} wood and takes ${R.beaver.buildTime}s to build; the lake floor becomes ${R.beaver.floorByStage.map(pct).join(' → ')} by stage. The island costs ${R.beaver.islandSticks} wood and opens ${WORLD.ISLAND_SLOTS.length} land planting spots in the lake. With any dam built, a lake above ${pct(R.beaver.spillAt)} spills over the dam.`,
+      `Beaver: arrives at lake ≥ 70% with 3 grown trees. While it is around and the dam is unfinished, a grown land tree drops a stick every ${R.beaver.stickEvery}s (max ${R.beaver.maxSticks} lying about). Tapping a stick or the beaver fetching it adds 1 wood. Each dam stage costs ${R.beaver.sticksPerStage} wood and takes ${R.beaver.buildTime}s to build; the lake floor becomes ${R.beaver.floorByStage.map(pct).join(' → ')} by stage. With any dam built, a lake above ${pct(R.beaver.spillAt)} spills over the dam.`,
       `Lake animals keep to zones (fractions of the open water, shore 0 → falls 1): ${Object.values(ANIMALS).filter(a => a.zone).map(a => `${a.name} ${a.zone.join('–')}`).join(', ')}. The otter rides the waterfall down 45% of the time it gets bored. Bugs pick lilies only 30% of the time.`,
       `Idle people wander by day and sleep standing at night (they still get up for planting tasks). Queued tasks go to the closest person with nothing to do.`,
     ]);
@@ -1156,5 +1206,5 @@
   }
   init();
   // Debug helpers (open the browser console): JP.skip(60) fast-forwards 60 seconds of game time.
-  window.JP = { state: () => S, cam, focusSlot, hitTest, hover: () => hover, dev: showDevSheet, spawn, pause: setPaused, step: (dt = 1 / 60) => { updateEffects(dt); updateCamera(dt); draw(); }, toScreen: (x, y) => ({ x: (x - cam.x) * cam.scale, y: y * cam.scale + cam.offY }), skip: sec => { for (let i = 0; i < sec * 10; i++) update(0.1); renderSeedBar(); updateHud(); }, save, give: (k, n = 5) => { S.seeds[k] = (S.seeds[k] || 0) + n; if (!S.unlocked.includes(k)) S.unlocked.push(k); renderSeedBar(); } };
+  window.JP = { state: () => S, cam, focusSlot, hitTest, hover: () => hover, dev: showDevSheet, spawn, pause: setPaused, whatNow, watch: watchEntity, photo: takePhoto, step: (dt = 1 / 60) => { updateEffects(dt); updateCamera(dt); draw(); }, toScreen: (x, y) => ({ x: (x - cam.x) * cam.scale, y: y * cam.scale + cam.offY }), skip: sec => { for (let i = 0; i < sec * 10; i++) update(0.1); renderSeedBar(); updateHud(); }, save, give: (k, n = 5) => { S.seeds[k] = (S.seeds[k] || 0) + n; if (!S.unlocked.includes(k)) S.unlocked.push(k); renderSeedBar(); } };
 })();

@@ -13,7 +13,7 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 
 ## World and time
 
-- The world is 1780 × 560 units. Ground is at y = 430. A cave sits at x = 85 on the left. The lake basin starts at x = 1330 and ends at a waterfall cliff at x = 1738. The beaver's dam goes at x = 1690 and its island at x = 1630 (two land spots at x = 1612 and 1650, y = 422).
+- The world is 1780 × 560 units. Ground is at y = 430. A cave sits at x = 85 on the left. The lake basin starts at x = 1330 and ends at a waterfall cliff at x = 1738. The beaver's dam goes at x = 1690.
 - 16 land planting spots sit every 72 units from x = 200. Three floating lake spots at x = 1420, 1495, 1570 take water plants only. Three decorative lily pads float at x = 1380, 1458, 1532.
 - A day is 180 s of daylight plus 90 s of night (270 s). A new jungle starts 25 s into Day 1. The day number is `floor(t / 270) + 1`; when it changes, sunrise happens.
 - Game time only advances while the page is open, no sheet is showing and the game is not paused. The ⏸️ button pauses; switching apps or tabs pauses automatically. There is no offline growth.
@@ -22,11 +22,20 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 ## Customizing
 
 - People, animals, the sun and the moon each have a name card with colors and a hat. Its ↩️ button restores the original look: a person's birth colors (stored on the person when they arrive), an animal's species colors and default name, the sun's and moon's defaults. An animal wears a permanent name tag only while its look or name differs from the default, so a reset removes the tag.
-- Pointing the mouse at a seed chip shows what it grows into, how long it takes, its fruit, who loves it, who brings it, how many you hold and whether you can upgrade one.
+- Pointing the mouse at a seed chip shows its name and how many are planted, grouped by level stars. The pick toast on touch tells how long the seed takes to grow.
+- The colour rows on a person's card run skin, hair, shirt, pants.
 
 ## Sun and moon
 
 - The sun and moon are tappable. Each has a name, two colors and a hat, saved with the game. Their sheet also has a button that jumps time to the next sunset or sunrise (which can bring a newcomer early).
+
+## Helping the player
+
+- 💡 **What now?** (yellow button above the seed bar) glides the camera to the most useful thing and says what to do, in this order: sticks to pick up, sometimes an unnamed animal, an empty spot you have a seed for, a plant you can upgrade, an unnamed animal, jungle you can clear, plants still growing, then general encouragement.
+- 👀 **Watch**: every animal and person card (and the Jungle Book rows) has a Zoom in and watch button. The camera zooms to at least 1.7× and follows that entity until the player swipes, pinches, scrolls, zooms or taps the Watching pill.
+- **Follow the action**: when an animal arrives, a new seed kind appears or a dam stage finishes, the camera glides there. It stays put if a sheet is open, a seed is picked, a finger is on the screen, something is being watched, the game is paused, or the player moved the camera in the last 4 s. The menu has a toggle to turn following off (saved).
+- Every tap on the canvas draws a quick white ripple so a miss still gets feedback.
+- 📸 **Take a picture** in the menu saves the canvas as a PNG named with the day, with a small caption in the corner. The HUD is not part of the canvas so it never appears in the photo.
 
 ## Camera
 
@@ -108,7 +117,7 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 
 - The beaver arrives when the lake is at least 70% full and 3 trees are grown. It is awake day and night, keeps near the lake, swims, eats bamboo and brings bamboo and nut seeds.
 - While the beaver is present and the dam is unfinished, a random grown land tree drops a stick every 40 s, up to 4 lying around. Tapping a stick collects it; the beaver also walks over and fetches sticks on its own. Collected sticks are "wood", shown in the 🪵 HUD pill as have/need.
-- With enough wood the beaver swims to the dam site and builds for 3 s. Stages 1 to 3 cost 4 wood each and raise the lake floor to 30%, 40% and 50%, so the lake can never drain below that. Stage 4 costs 6 wood and builds the island, which opens 2 land planting spots in the lake. People plant them from the shore like lilies. Birds and bugs visit island plants; ground animals and climbers do not.
+- With enough wood the beaver swims to the dam site and builds for 3 s. Stages 1 to 3 cost 4 wood each and raise the lake floor to 30%, 40% and 50%, so the lake can never drain below that. After stage 3 the sticks stop dropping. (An earlier build had a stage 4 island with two planting spots; it made the pond too crowded and was removed. Saves that had island plants get those seeds refunded.)
 - Once any dam stage exists, a lake above 97% spills over the dam as a small second waterfall with foam.
 - Tapping the dam says how far along it is and how much wood is needed.
 

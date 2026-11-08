@@ -210,7 +210,7 @@ const Draw = (() => {
   function drawDam(ctx, stage, level, t, spill) {
     if (!stage) return;
     const gy = WORLD.GROUND_Y, dx = WORLD.DAM_X, floor = gy + 75, wy = waterY(level);
-    const h = [0, 34, 58, 86, 86][Math.min(stage, 4)], top = floor - h;
+    const h = [0, 34, 58, 86][Math.min(stage, 3)], top = floor - h;
     rrect(ctx, dx - 16, top, 32, h, 6, '#6b4320');
     for (let k = 0; k < Math.floor(h / 9); k++) { const y = floor - 6 - k * 9, off = (k % 2) * 5; rrect(ctx, dx - 15 + off, y - 3, 28 - off * 2, 6, 3, k % 2 ? '#8a5a2b' : '#a9743d'); circ(ctx, dx - 14 + off, y, 2.5, '#d9b48a'); circ(ctx, dx + 13 - off, y, 2.5, '#d9b48a'); }
     if (stage >= 3) { circ(ctx, dx - 10, top - 4, 6, '#3f8f3a'); circ(ctx, dx + 8, top - 5, 7, '#2e8b3a'); }
@@ -222,13 +222,6 @@ const Draw = (() => {
       for (let k = 0; k < 4; k++) { ctx.globalAlpha = spill * (0.4 + 0.3 * Math.sin(t * 5 + k)); circ(ctx, dx + 12 + k * 6, top - 2 - Math.abs(Math.sin(t * 3 + k)) * 6, 4, '#eaf7ff'); }
       ctx.globalAlpha = 1;
     }
-  }
-  function drawIsland(ctx, built, t) {
-    if (!built) return;
-    const x = WORLD.ISLAND_X, y = WORLD.ISLAND_Y;
-    ell(ctx, x, y + 14, 58, 22, '#a68556'); ell(ctx, x, y + 4, 52, 12, '#c9a46a'); ell(ctx, x, y + 1, 46, 7, '#56b04a');
-    for (let k = -3; k <= 3; k++) { const gx = x + k * 13; line(ctx, gx, y + 2, gx - 2, y - 6 - (k % 2) * 3, '#4aa040', 2); }
-    ell(ctx, x - 44, y + 6, 7, 4, '#6b5a48'); ell(ctx, x + 46, y + 8, 6, 3.5, '#6b5a48');
   }
   // --- waterfall at the right end of the lake ---
   function drawCliff(ctx) {
@@ -897,5 +890,5 @@ const Draw = (() => {
     ctx.fillStyle = '#fff'; ctx.fillText(text, x, y);
   }
 
-  return { setView, ell, circ, rect, rrect, line, poly, eye, smile, shade, lerpColor, seeded, nightFactor, drawSky, drawStars, drawSunMoon, drawClouds, drawFarJungle, drawGround, drawBush, drawMound, drawCave, drawCliff, drawFalls, drawStick, drawDam, drawIsland, drawLilyPad, drawPlantButton, sunMoonPos, drawSunMoonAt, waterY, drawLakeBasin, drawWater, drawWaterFront, plantMetrics, drawPlant, drawWaterSpot, levelScale, star, drawLevelStars, drawAccessory, drawPerson, drawCritter, drawFireflies, drawZzz, drawLabel };
+  return { setView, ell, circ, rect, rrect, line, poly, eye, smile, shade, lerpColor, seeded, nightFactor, drawSky, drawStars, drawSunMoon, drawClouds, drawFarJungle, drawGround, drawBush, drawMound, drawCave, drawCliff, drawFalls, drawStick, drawDam, drawLilyPad, drawPlantButton, sunMoonPos, drawSunMoonAt, waterY, drawLakeBasin, drawWater, drawWaterFront, plantMetrics, drawPlant, drawWaterSpot, levelScale, star, drawLevelStars, drawAccessory, drawPerson, drawCritter, drawFireflies, drawZzz, drawLabel };
 })();

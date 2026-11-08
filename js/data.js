@@ -8,7 +8,6 @@ const WORLD = {
   SLOT_X0: 200, SLOT_DX: 72, MAX_SLOTS: 16, // 16 spots, 72 apart so neighbouring trees overlap less
   LAKE_SLOTS: [1420, 1495, 1570], // x positions of the floating water-plant spots
   LILY_PADS: [1380, 1458, 1532],  // decorative pads frogs hop onto
-  ISLAND_X: 1630, ISLAND_Y: 422, ISLAND_SLOTS: [1612, 1650], // the beaver's island (2 land spots once built)
   DAM_X: 1690,            // where the beaver builds the dam
   FALLS_X: 1738,          // the waterfall cliff starts here
   DAY: 180, NIGHT: 90,    // seconds (3 minute day, 1.5 minute night)
@@ -26,7 +25,7 @@ const RULES = {
   upgrade: { maxLevel: 3, sizePerLevel: 0.15, fruitMaxPerLevel: 1, fruitSpeedPerLevel: 0.2, giftBonusPerLevel: 0.15 },
   seeds:   { fallbackAfter: 75 },
   save:    { every: 5 },
-  beaver:  { stickEvery: 40, maxSticks: 4, sticksPerStage: 4, islandSticks: 6, floorByStage: [0.2, 0.3, 0.4, 0.5], spillAt: 0.97, buildTime: 3 },
+  beaver:  { stickEvery: 40, maxSticks: 4, sticksPerStage: 4, maxStage: 3, floorByStage: [0.2, 0.3, 0.4, 0.5], spillAt: 0.97, buildTime: 3 },
 };
 
 // Plants. grow = seconds from seed to fully grown (daytime, no rain).

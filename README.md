@@ -18,8 +18,10 @@ then visit http://localhost:8787 (on a phone on the same wifi, use the computer'
 - Water lilies grow on the three floating spots in the lake. A waterfall feeds the lake at the far right, and frogs hop onto the lily pads.
 - Empty spots show a round + button. Tap it to plant there. Growing plants show a progress bar underneath, grown plants show their level stars.
 - A cave on the left: bats sleep in it by day and a bear sleeps in it at night.
-- A beaver comes when the lake is full and trees are grown. Trees drop sticks; tap them (or let the beaver fetch them) and it builds a dam in three stages, then an island with two more planting spots. A full lake spills over the dam, and the otter slides down the waterfall.
+- A beaver comes when the lake is full and trees are grown. Trees drop sticks; tap them (or let the beaver fetch them) and it builds a dam in three stages that keeps the lake from draining. A full lake spills over the dam, and the otter slides down the waterfall.
 - ⏸️ pauses the game. It also pauses on its own when you switch apps.
+- 💡 says what to do next and takes you there. 👀 on any name card zooms in and follows that animal or person. The camera also glides to new arrivals unless you are busy (toggle in the menu).
+- 📸 in the menu saves a picture of your jungle.
 - Days are 3 minutes, nights 1.5 minutes. Plants grow slower at night and faster in the rain. Rain also fills the lake.
 - Grown trees make fruit. Animals come to eat it and bring you seeds, including new kinds. Every new animal brings a welcome seed soon after it arrives.
 - The first animals come for the starter trees and flowers. Bigger ones (sloth, tapir, owl, gorilla, jaguar, elephant) need more grown trees. The Jungle Book shows what each one is waiting for.

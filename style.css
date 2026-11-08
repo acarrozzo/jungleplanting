@@ -23,6 +23,7 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: 
 #tip { position: fixed; z-index: 6; background: rgba(27,42,29,0.95); color: #fff; padding: 10px 14px; border-radius: 14px; font-size: 13px; line-height: 1.5; max-width: 300px; pointer-events: none; box-shadow: 0 6px 18px rgba(0,0,0,0.35); animation: pop .15s ease-out; }
 #tip.hidden { display: none; }
 #tip b { font-size: 15px; }
+#tip .levelstars { color: #ffd21f; font-size: 14px; letter-spacing: 0; }
 
 /* Seed bar */
 #seedbar { position: fixed; bottom: 0; left: 0; right: 0; display: flex; gap: 8px; padding: 8px 10px calc(10px + env(safe-area-inset-bottom)); overflow-x: auto; background: linear-gradient(180deg, rgba(27,42,29,0) 0%, rgba(27,42,29,0.55) 100%); scrollbar-width: none; }
@@ -60,6 +61,12 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: 
 .optrow .acc { width: 28px; height: 28px; font-size: 15px; border-radius: 8px; border-width: 2px; padding: 0; }
 .card.compact button.big { padding: 12px; font-size: 17px; }
 @media (min-width: 600px) and (min-height: 300px) { #sheetCard:has(.card.compact) { width: min(96vw, 580px); } .custbody { grid-template-columns: 180px 1fr; align-items: start; } .custleft .inline { max-width: none; } }
+#btnHint { position: fixed; right: 10px; bottom: calc(84px + env(safe-area-inset-bottom)); width: 54px; height: 54px; font-size: 26px; background: linear-gradient(135deg, #ffe66b, #ffc21f); box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 4; }
+#watchPill { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(84px + env(safe-area-inset-bottom)); border: none; border-radius: 999px; background: rgba(27,42,29,0.92); color: #fff; font-weight: 800; font-size: 14px; padding: 10px 16px; cursor: pointer; z-index: 4; font-family: inherit; animation: pop .2s ease-out; }
+#watchPill.hidden { display: none; }
+#flash { position: fixed; inset: 0; background: #fff; z-index: 20; pointer-events: none; animation: flashout .35s ease-out forwards; }
+#flash.hidden { display: none; }
+@keyframes flashout { from { opacity: 1; } to { opacity: 0; } }
 /* pause */
 #pauseOverlay { position: fixed; inset: 0; background: rgba(10,20,12,0.5); display: flex; align-items: center; justify-content: center; z-index: 9; }
 #pauseOverlay.hidden { display: none; }
