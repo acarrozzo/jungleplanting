@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#1f5a2e">
+  <title>Jungle Planting</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud">
+    <div class="hud-left">
+      <div id="dayLabel" class="pill">Day 1</div>
+      <div class="pill clock"><span id="weather">☀️</span><div class="bar"><div id="clockBar"></div></div></div>
+      <div id="lakeLabel" class="pill">💧 50%</div>
+    </div>
+    <div class="hud-right">
+      <button id="btnPlants" class="hudbtn" title="My Plants">🌱</button>
+      <button id="btnBook" class="hudbtn" title="Jungle Book">📖</button>
+      <button id="btnSound" class="hudbtn" title="Sound">🔊</button>
+      <button id="btnMenu" class="hudbtn" title="Menu">☰</button>
+    </div>
+  </div>
+
+  <div id="scrollctrls">
+    <button id="btnLeft" class="hudbtn" title="Look left">◀</button>
+    <button id="btnRight" class="hudbtn" title="Look right">▶</button>
+  </div>
+  <div id="zoomctrls">
+    <button id="btnZoomIn" class="hudbtn" title="Zoom in">➕</button>
+    <button id="btnZoomOut" class="hudbtn" title="Zoom out">➖</button>
+  </div>
+
+  <div id="toasts"></div>
+  <div id="seedbar"></div>
+
+  <div id="sheet" class="hidden"><div id="sheetCard"></div></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/draw.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
