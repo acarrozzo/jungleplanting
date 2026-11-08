@@ -2,10 +2,12 @@
 // Everything about plants, animals, colors and accessories lives here so it's easy to tweak.
 
 const WORLD = {
-  W: 1280, H: 560, GROUND_Y: 430,
-  LAKE_X: 950,            // where the lake basin starts
-  SLOT_X0: 60, SLOT_DX: 56, MAX_SLOTS: 16,
-  LAKE_SLOTS: [1060, 1140, 1220], // x positions of the floating water-plant spots
+  W: 1520, H: 560, GROUND_Y: 430,
+  LAKE_X: 1190,           // where the lake basin starts
+  SLOT_X0: 60, SLOT_DX: 72, MAX_SLOTS: 16, // 16 spots, 72 apart so neighbouring trees overlap less
+  LAKE_SLOTS: [1280, 1355, 1430], // x positions of the floating water-plant spots
+  LILY_PADS: [1240, 1318, 1392],  // decorative pads frogs hop onto
+  FALLS_X: 1478,          // the waterfall cliff starts here
   DAY: 180, NIGHT: 90,    // seconds (3 minute day, 1.5 minute night)
 };
 WORLD.CYCLE = WORLD.DAY + WORLD.NIGHT;
@@ -86,8 +88,12 @@ const ACCESSORIES = [
   { id: 'tophat',   name: 'Top Hat',   emoji: '🎩' },
 ];
 
+// Short palettes keep the customize sheet small enough to fit on a phone screen without scrolling.
+const PEOPLE_COLORS = ['#ff3b3b', '#ff8c1a', '#ffd21f', '#5bd15b', '#2fd2c0', '#2f6bff', '#8a4fff', '#ff4fa0'];
+const ANIMAL_COLORS = ['#ff3b3b', '#ff8c1a', '#ffd21f', '#5bd15b', '#2f6bff', '#8a4fff', '#ff4fa0', '#ffffff'];
+const SKY_COLORS = ['#ffd84a', '#ff9f2e', '#ff6b6b', '#ff4fa0', '#f2f4ff', '#cfe3ff', '#b9a6ff', '#8ff0d8'];
 const COLORS = ['#ff3b3b', '#ff8c1a', '#ffd21f', '#5bd15b', '#2e8b3a', '#2fd2c0', '#2f6bff', '#8a4fff', '#ff4fa0', '#ffffff', '#c9c9c9', '#6d6d6d', '#222222', '#8b5a2b', '#e8c39e', '#ffe0bd'];
 const SKIN_COLORS = ['#ffe0bd', '#f1c27d', '#e0ac69', '#c68642', '#8d5524', '#5a3a1a'];
-const HAIR_COLORS = ['#222222', '#5a3a1a', '#8b5a2b', '#d9a066', '#ffd21f', '#ff3b3b', '#2f6bff', '#8a4fff', '#ff4fa0', '#c9c9c9'];
+const HAIR_COLORS = ['#222222', '#5a3a1a', '#8b5a2b', '#d9a066', '#ff3b3b', '#2f6bff', '#8a4fff', '#ff4fa0'];
 
 const PERSON_NAMES = ['Maya', 'Leo', 'Zuri', 'Kai', 'Nova', 'Milo', 'Aria', 'Finn', 'Luna', 'Theo', 'Ivy', 'Remy'];

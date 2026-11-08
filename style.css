@@ -39,6 +39,23 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: 
 .card h2 { margin: 0; font-size: 22px; text-align: center; }
 .card .sub { margin: 0; text-align: center; color: #4a5a4c; font-size: 15px; }
 .card .preview { width: 240px; height: 200px; margin: 0 auto; border-radius: 16px; background: #dff3d8; }
+/* compact customizer: fits a phone screen without scrolling */
+.card.compact { gap: 8px; padding: 14px 16px 16px; }
+.card.compact h2 { font-size: 19px; }
+.card.compact .sub { font-size: 13px; }
+.custbody { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.custleft { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.custleft .inline { width: 100%; max-width: 240px; }
+.card.compact .preview { width: 160px; height: 130px; margin: 0; }
+.card.compact input { font-size: 16px; padding: 8px 10px; }
+.custright { display: flex; flex-direction: column; gap: 6px; }
+.optrow { display: flex; align-items: center; gap: 6px; }
+.optrow label { flex: 0 0 42px; font-size: 12px; font-weight: 800; color: #2d4a32; }
+.optrow .swatches, .optrow .accs { flex-wrap: nowrap; gap: 5px; }
+.optrow .sw { width: 28px; height: 28px; border-width: 2px; }
+.optrow .acc { width: 31px; height: 31px; font-size: 17px; border-radius: 9px; border-width: 2px; padding: 0; }
+.card.compact button.big { padding: 12px; font-size: 17px; }
+@media (min-width: 600px) and (min-height: 300px) { .custbody { grid-template-columns: 180px 1fr; align-items: start; } .custleft .inline { max-width: none; } }
 .row { display: flex; flex-direction: column; gap: 6px; }
 .row label { font-weight: 800; font-size: 14px; color: #2d4a32; }
 .row input { font-size: 18px; padding: 10px 12px; border-radius: 12px; border: 2px solid #b7d1b2; font-family: inherit; font-weight: 700; width: 100%; }
@@ -100,4 +117,12 @@ button.small { font-size: 14px; font-weight: 800; padding: 8px 12px; border-radi
   #btnSound { display: none; }
   .pill { font-size: 14px; padding: 5px 10px; }
   .clock .bar { width: 54px; }
+}
+/* Short screens (phones held sideways): tighter customizer so nothing scrolls */
+@media (max-height: 430px) {
+  .card.compact { gap: 5px; padding: 10px 14px 12px; }
+  .card.compact .sub { display: none; }
+  .card.compact .preview { width: 140px; height: 104px; }
+  .card.compact button.big { padding: 9px; font-size: 16px; }
+  .optrow .sw { width: 26px; height: 26px; }
 }

@@ -13,11 +13,15 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 
 ## World and time
 
-- The world is 1280 × 560 units. Ground is at y = 430. The lake basin starts at x = 950.
-- 16 land planting spots sit every 56 units from x = 60. Three floating lake spots at x = 1060, 1140, 1220 take water plants only.
+- The world is 1520 × 560 units. Ground is at y = 430. The lake basin starts at x = 1190 and ends at a waterfall cliff at x = 1478.
+- 16 land planting spots sit every 72 units from x = 60. Three floating lake spots at x = 1280, 1355, 1430 take water plants only. Three decorative lily pads float at x = 1240, 1318, 1392.
 - A day is 180 s of daylight plus 90 s of night (270 s). A new jungle starts 25 s into Day 1. The day number is `floor(t / 270) + 1`; when it changes, sunrise happens.
 - Game time only advances while the page is open and no sheet is showing. There is no offline growth.
 - Autosave every 5 s and whenever the tab hides, to `localStorage` under `junglePlanting.save.v1` (save format version 2, with migration from version 1).
+
+## Sun and moon
+
+- The sun and moon are tappable. Each has a name, two colors and a hat, saved with the game. Their sheet also has a button that jumps time to the next sunset or sunrise (which can bring a newcomer early).
 
 ## Camera
 
@@ -27,7 +31,7 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 ## Planting spots
 
 - 6 land spots are open at the start. Each newcomer opens 2 more. Tapping thick jungle lets you spend 3 seeds of one kind to have a person clear 1 spot right away. Maximum 16. Lake spots are always open.
-- Tapping an open empty spot with a seed selected plants it. Without a selection, the seed picker opens, filtered to land or water seeds.
+- Every open empty spot shows a round + button under it. Tapping the spot or the button with a seed selected plants it; the button bounces while a seed is picked. Without a selection, the seed picker opens, filtered to land or water seeds.
 
 ## People
 
@@ -68,7 +72,7 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 - **bird** flies in from the side of the screen and perches on tree tops.
 - **climber** sits in a canopy (the tree frog sits lower on the trunk).
 - **bug** hovers at flowers and lilies.
-- **ground** walks in from the left along the ground. Capybara and frog prefer the lake shore.
+- **ground** walks in from the left along the ground. Capybara and frog prefer the lake shore. The frog hops (55% of the time it picks a target) onto a lily pad or a grown water lily and sits there at the water line.
 - **lake** swims in the lake, fish at a random depth.
 - **glow** is the fireflies, which appear at a flower.
 - Picking a target: with a gift ready (or half the time anyway) an eater heads for a plant with fruit it likes. Otherwise a random plant of its kind, avoiding the one it is already on. Idle time between moves is 6 to 14 s (3 to 14 s for bugs).

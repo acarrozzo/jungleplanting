@@ -72,30 +72,38 @@ const Draw = (() => {
     ctx.globalAlpha = 1;
   }
 
-  function drawSunMoon(ctx, phase, t) {
-    const gy = WORLD.GROUND_Y;
-    if (phase < WORLD.DAY) {
-      const p = phase / WORLD.DAY;
-      const x = 60 + p * (WORLD.W - 120), y = gy - 40 - Math.sin(Math.PI * p) * 330;
-      const g = ctx.createRadialGradient(x, y, 20, x, y, 90);
-      g.addColorStop(0, 'rgba(255,230,120,0.55)'); g.addColorStop(1, 'rgba(255,230,120,0)');
-      ctx.fillStyle = g; ctx.fillRect(x - 90, y - 90, 180, 180);
-      circ(ctx, x, y, 34, '#ffd84a');
-      circ(ctx, x - 8, y - 8, 10, '#fff2a8');
-      // happy sun face
+  // Where the sun (by day) or moon (by night) is right now.
+  function sunMoonPos(phase) {
+    const gy = WORLD.GROUND_Y, sun = phase < WORLD.DAY;
+    const p = sun ? phase / WORLD.DAY : (phase - WORLD.DAY) / WORLD.NIGHT;
+    return { x: 60 + p * (WORLD.W - 120), y: gy - 40 - Math.sin(Math.PI * p) * 330, sun };
+  }
+  // body: { c1, c2, acc } chosen by the player
+  function drawSunMoonAt(ctx, x, y, body, sun, t) {
+    const c1 = (body && body.c1) || (sun ? '#ffd84a' : '#f2f4ff'), c2 = (body && body.c2) || (sun ? '#fff2a8' : '#d6dbf0');
+    const g = ctx.createRadialGradient(x, y, 20, x, y, sun ? 90 : 80);
+    g.addColorStop(0, sun ? 'rgba(255,230,120,0.55)' : 'rgba(220,230,255,0.35)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g; ctx.fillRect(x - 90, y - 90, 180, 180);
+    if (sun) {
+      // rays
+      ctx.save(); ctx.translate(x, y); ctx.rotate(t * 0.15); ctx.globalAlpha = 0.5;
+      for (let i = 0; i < 12; i++) { ctx.rotate(Math.PI / 6); line(ctx, 0, -40, 0, -50 - (i % 2) * 6, c1, 3); }
+      ctx.restore(); ctx.globalAlpha = 1;
+      circ(ctx, x, y, 34, c1); circ(ctx, x - 8, y - 8, 10, c2);
       eye(ctx, x - 10, y - 4, 4, false); eye(ctx, x + 10, y - 4, 4, false); smile(ctx, x, y + 6, 10);
-      return { x, y };
+      ctx.globalAlpha = 0.5; circ(ctx, x - 17, y + 6, 4, '#ff9f6e'); circ(ctx, x + 17, y + 6, 4, '#ff9f6e'); ctx.globalAlpha = 1;
+      if (body) drawAccessory(ctx, body.acc, x, y, 30);
     } else {
-      const p = (phase - WORLD.DAY) / WORLD.NIGHT;
-      const x = 60 + p * (WORLD.W - 120), y = gy - 40 - Math.sin(Math.PI * p) * 330;
-      const g = ctx.createRadialGradient(x, y, 20, x, y, 80);
-      g.addColorStop(0, 'rgba(220,230,255,0.35)'); g.addColorStop(1, 'rgba(220,230,255,0)');
-      ctx.fillStyle = g; ctx.fillRect(x - 80, y - 80, 160, 160);
-      circ(ctx, x, y, 30, '#f2f4ff');
-      circ(ctx, x - 9, y - 6, 6, '#d6dbf0'); circ(ctx, x + 8, y + 8, 4, '#d6dbf0'); circ(ctx, x + 6, y - 12, 3, '#d6dbf0');
+      circ(ctx, x, y, 30, c1);
+      circ(ctx, x - 9, y - 6, 6, c2); circ(ctx, x + 8, y + 8, 4, c2); circ(ctx, x + 6, y - 12, 3, c2);
       eye(ctx, x - 9, y + 2, 3, true); eye(ctx, x + 9, y + 2, 3, true); smile(ctx, x, y + 8, 7);
-      return { x, y };
+      if (body) drawAccessory(ctx, body.acc, x, y, 27);
     }
+  }
+  function drawSunMoon(ctx, phase, t, sunBody, moonBody) {
+    const p = sunMoonPos(phase);
+    drawSunMoonAt(ctx, p.x, p.y, p.sun ? sunBody : moonBody, p.sun, t);
+    return p;
   }
 
   function drawClouds(ctx, t, rain) {
@@ -111,16 +119,39 @@ const Draw = (() => {
     }
   }
 
+  // --- the deep jungle behind everything: misty far canopy, tall trees with vines, palms, ferns ---
+  function vine(ctx, x, y, len, seed) {
+    ctx.strokeStyle = '#1c4d2a'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x, y);
+    for (let k = 1; k <= 4; k++) ctx.lineTo(x + Math.sin(seed + k * 1.7) * 7, y + len * k / 4);
+    ctx.stroke();
+    for (let k = 1; k <= 4; k++) ell(ctx, x + Math.sin(seed + k * 1.7) * 7 + (k % 2 ? 5 : -5), y + len * k / 4 - 4, 5, 2.5, '#2a6f38', k % 2 ? 0.6 : -0.6);
+  }
+  function palmSil(ctx, x, gy, h, col, seed) {
+    const lean = (seeded(seed) - 0.5) * 50, tx = x + lean, ty = gy - h;
+    ctx.strokeStyle = col; ctx.lineWidth = 7; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x, gy); ctx.quadraticCurveTo(x + lean * 0.3, gy - h * 0.6, tx, ty); ctx.stroke();
+    for (let k = 0; k < 7; k++) { const a = -Math.PI * 0.95 + k * Math.PI * 0.9 / 6, L = 48 + seeded(seed + k) * 16; ell(ctx, tx + Math.cos(a) * L * 0.5, ty + Math.sin(a) * L * 0.5 + 6, L * 0.55, 6, col, a); }
+    circ(ctx, tx, ty + 6, 6, col);
+  }
+  function fern(ctx, x, gy, size, col, seed) {
+    for (let k = -2; k <= 2; k++) { const a = -Math.PI / 2 + k * 0.42 + (seeded(seed) - 0.5) * 0.2, L = size * (1 - Math.abs(k) * 0.15); const ex = x + Math.cos(a) * L, ey = gy + Math.sin(a) * L; line(ctx, x, gy, ex, ey, col, 2); for (let j = 1; j <= 3; j++) { const px = x + (ex - x) * j / 4, py = gy + (ey - gy) * j / 4, s = L * 0.18 * (1 - j / 5); line(ctx, px, py, px + Math.cos(a + 1.1) * s, py + Math.sin(a + 1.1) * s, col, 1.5); line(ctx, px, py, px + Math.cos(a - 1.1) * s, py + Math.sin(a - 1.1) * s, col, 1.5); } }
+  }
   function drawFarJungle(ctx) {
-    const gy = WORLD.GROUND_Y;
-    for (let layer = 0; layer < 2; layer++) {
-      const col = layer === 0 ? '#1f5a2e' : '#2a6f38';
-      for (let i = -2; i < 40; i++) {
-        const x = i * 70 + layer * 35 + seeded(i + layer * 99) * 30;
-        const r = 40 + seeded(i * 3 + layer) * 45 - layer * 10;
-        circ(ctx, x, gy - r * 0.6 + layer * 12, r, col);
-      }
+    const gy = WORLD.GROUND_Y, W = WORLD.W;
+    // far misty canopy
+    for (let i = -2; i * 64 < W + 100; i++) { const x = i * 64 + seeded(i * 7) * 30, r = 55 + seeded(i * 3 + 1) * 40; circ(ctx, x, gy - 135 - seeded(i) * 40 + r * 0.3, r, '#3b7a62'); }
+    rect(ctx, -200, gy - 260, W + 600, 270, 'rgba(190,225,215,0.16)');
+    // tall jungle trees with buttress roots, big crowns and the odd hanging vine
+    for (let i = -1; i * 84 < W + 60; i++) {
+      const x = i * 84 + seeded(i * 11 + 5) * 40, h = 190 + seeded(i * 5 + 2) * 90, tw = 7 + seeded(i) * 5, R = 34 + seeded(i * 13) * 22;
+      const col = '#245f33', dark = '#1c4d2a';
+      rect(ctx, x - tw / 2, gy - h, tw, h + 10, dark);
+      poly(ctx, [[x - tw / 2, gy - 30], [x - tw * 2.2, gy + 2], [x - tw / 2, gy + 2]], dark); poly(ctx, [[x + tw / 2, gy - 30], [x + tw * 2.2, gy + 2], [x + tw / 2, gy + 2]], dark);
+      circ(ctx, x - R * 0.8, gy - h + R * 0.2, R * 0.75, col); circ(ctx, x + R * 0.85, gy - h + R * 0.15, R * 0.8, col); circ(ctx, x, gy - h - R * 0.3, R, col); circ(ctx, x + R * 0.1, gy - h - R * 0.9, R * 0.6, col);
+      if (i % 3 === 0) { line(ctx, x, gy - h + 12, x + 44, gy - h - 4, dark, 4); vine(ctx, x + 44, gy - h - 4, 70 + seeded(i) * 50, i); vine(ctx, x + 22, gy - h + 4, 40 + seeded(i + 1) * 30, i + 9); }
     }
+    for (let i = 0; 70 + i * 190 < W; i++) { const x = 70 + i * 190 + seeded(i * 17) * 60; palmSil(ctx, x, gy, 150 + seeded(i * 3) * 60, '#1c4d2a', i); }
+    // near ferns and bushes along the ground
+    for (let i = -2; i * 30 < W + 40; i++) { const x = i * 30 + seeded(i * 19) * 20; if (i % 2) fern(ctx, x, gy, 20 + seeded(i) * 16, '#163f22', i); else circ(ctx, x, gy - 12, 16 + seeded(i + 3) * 12, '#1a4a28'); }
   }
 
   function drawGround(ctx) {
@@ -148,6 +179,42 @@ const Draw = (() => {
     circ(ctx, x - 14, gy - 10, 16, '#245c2c'); circ(ctx, x + 12, gy - 12, 18, '#2b6b34'); circ(ctx, x, gy - 4, 14, '#1e4d26');
   }
 
+  // --- waterfall at the right end of the lake ---
+  function drawCliff(ctx) {
+    const gy = WORLD.GROUND_Y, fx = WORLD.FALLS_X, top = gy - 170;
+    poly(ctx, [[fx, gy + 80], [fx - 6, gy + 10], [fx + 4, gy - 60], [fx - 3, gy - 120], [fx + 6, top], [WORLD.W + 400, top], [WORLD.W + 400, gy + 80]], '#5a4a3a');
+    for (let k = 0; k < 6; k++) { const y = top + 25 + k * 38; rrect(ctx, fx - 2 + (k % 2) * 6, y, 30 + (k % 3) * 8, 10, 4, k % 2 ? '#6b5a48' : '#4a3b2d'); }
+    rect(ctx, fx - 4, top - 6, WORLD.W + 400, 8, '#2e8b3a'); // mossy lip
+    for (let k = 0; k < 4; k++) circ(ctx, fx + 10 + k * 14, top - 8, 7 + (k % 2) * 3, '#3f8f3a');
+    fern(ctx, fx + 8, top - 4, 22, '#2a6f38', 41); fern(ctx, fx + 30, top - 4, 18, '#2a6f38', 42);
+    rect(ctx, fx + 8, top - 10, WORLD.W + 400, 7, '#3aa0e0'); // the stream feeding the falls
+  }
+  function drawFalls(ctx, level, t) {
+    const gy = WORLD.GROUND_Y, fx = WORLD.FALLS_X, top = gy - 176, wy = waterY(level), x0 = fx + 6, w = 28;
+    ctx.globalAlpha = 0.85; rect(ctx, x0, top, w, wy - top, '#7cc8f0'); ctx.globalAlpha = 1;
+    // falling streaks
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    for (let k = 0; k < 6; k++) { const sx = x0 + 4 + k * 4; const off = ((t * 180 + k * 37) % (wy - top)); ctx.beginPath(); ctx.moveTo(sx, top + off); ctx.lineTo(sx, Math.min(wy, top + off + 26)); ctx.stroke(); }
+    // mist and foam where it lands
+    for (let k = 0; k < 7; k++) { const px = x0 - 14 + k * 9 + Math.sin(t * 3 + k) * 3, py = wy - 2 - Math.abs(Math.sin(t * 2.5 + k * 1.3)) * 9; ctx.globalAlpha = 0.45 + 0.3 * Math.sin(t * 4 + k); circ(ctx, px, py, 5 + (k % 3) * 2, '#eaf7ff'); }
+    ctx.globalAlpha = 1;
+  }
+  function drawLilyPad(ctx, x, wy, t, i) {
+    const y = wy + Math.sin(t * 1.6 + i * 2) * 1.2;
+    ell(ctx, x, y, 17, 7.5, '#2e8b3a');
+    ell(ctx, x - 2, y - 1, 12, 4.5, '#3fa84a');
+    // notch
+    poly(ctx, [[x, y], [x + 17, y - 4], [x + 17, y + 2]], '#3aa0e0');
+    line(ctx, x - 10, y, x + 10, y - 1, '#56b04a', 1);
+  }
+  // round "plant here" button under an empty spot; hot = a seed is picked so it bounces
+  function drawPlantButton(ctx, x, y, t, hot) {
+    const by = y + 20 - (hot ? Math.abs(Math.sin(t * 5)) * 4 : 0), r = 12;
+    ctx.globalAlpha = 0.35; ell(ctx, x, y + 22, r + 2, 4, '#000'); ctx.globalAlpha = 1;
+    circ(ctx, x, by, r, hot ? '#ffd21f' : '#ffffff');
+    ctx.strokeStyle = hot ? '#b8860b' : '#2e8b3a'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, by, r, 0, TAU); ctx.stroke();
+    line(ctx, x - 6, by, x + 6, by, '#2e8b3a', 3.5); line(ctx, x, by - 6, x, by + 6, '#2e8b3a', 3.5);
+  }
   function drawMound(ctx, x, highlight) {
     const gy = WORLD.GROUND_Y;
     ell(ctx, x, gy + 4, 20, 7, '#5a3b1e');
@@ -732,5 +799,5 @@ const Draw = (() => {
     ctx.fillStyle = '#fff'; ctx.fillText(text, x, y);
   }
 
-  return { ell, circ, rect, rrect, line, poly, eye, smile, shade, lerpColor, seeded, nightFactor, drawSky, drawStars, drawSunMoon, drawClouds, drawFarJungle, drawGround, drawBush, drawMound, waterY, drawLakeBasin, drawWater, drawWaterFront, plantMetrics, drawPlant, drawWaterSpot, levelScale, star, drawLevelStars, drawAccessory, drawPerson, drawCritter, drawFireflies, drawZzz, drawLabel };
+  return { ell, circ, rect, rrect, line, poly, eye, smile, shade, lerpColor, seeded, nightFactor, drawSky, drawStars, drawSunMoon, drawClouds, drawFarJungle, drawGround, drawBush, drawMound, drawCliff, drawFalls, drawLilyPad, drawPlantButton, sunMoonPos, drawSunMoonAt, waterY, drawLakeBasin, drawWater, drawWaterFront, plantMetrics, drawPlant, drawWaterSpot, levelScale, star, drawLevelStars, drawAccessory, drawPerson, drawCritter, drawFireflies, drawZzz, drawLabel };
 })();
