@@ -45,6 +45,8 @@
   const fruitMax = p => PLANTS[p.id].fruit.max + RULES.upgrade.fruitMaxPerLevel * ((p.level || 1) - 1);
   const fruitInterval = p => PLANTS[p.id].fruit.interval * (1 - RULES.upgrade.fruitSpeedPerLevel * ((p.level || 1) - 1));
   const upgradeCost = p => (p.level || 1) + 1;
+  const KIND_ORDER = { tree: 0, bush: 1, flower: 2, water: 3 };
+  const sortedSeeds = keys => [...keys].sort((a, b) => (KIND_ORDER[PLANTS[a].kind] - KIND_ORDER[PLANTS[b].kind]) || S.unlocked.indexOf(a) - S.unlocked.indexOf(b));
   const starText = p => '★'.repeat(p.level || 1) + '☆'.repeat(MAX_LEVEL - (p.level || 1));
 
   // ---------- state ----------
@@ -103,7 +105,7 @@
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
     canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
     // Portrait phones start zoomed in (about 6 planting spots wide); wide screens show more of the jungle.
-    cam.base = Math.min(H / WORLD.H, W / 420);
+    cam.base = Math.max(0.05, Math.min(H / WORLD.H, W / 420));
     applyCam();
   }
   function applyCam() {
@@ -288,9 +290,10 @@
     let choice = null;
     if (tasty.length && (a.giftT <= 0 || Math.random() < 0.5)) choice = pick(tasty);
     else if (pool.length) { const others = pool.filter(g => g.i !== a.slot); choice = pick(others.length ? others : pool); }
-    if (sp.kind === 'lake') { a.slot = -1; a.tx = zoneX(sp); if (a.sp === 'fish') a.depth = rand(8, 28); return; }
+    if (sp.kind === 'lake') { a.slot = -1; a.onLand = !!sp.amphibious && Math.random() < 0.4; a.tx = a.onLand ? rand(WORLD.LAKE_X - 190, WORLD.LAKE_X - 50) : zoneX(sp); if (a.sp === 'fish') a.depth = rand(8, 28); return; }
     if (sp.kind === 'ground') {
       a.ty = GY; a.pad = null;
+      if (a.sp === 'armadillo') a.rolling = Math.random() < 0.6;
       if (a.sp === 'frog' && Math.random() < 0.55) {
         const pads = [...WORLD.LILY_PADS, ...grown.filter(g => g.d.kind === 'water').map(g => slotX(g.i))].filter(px => px !== a.pad);
         if (pads.length) { a.slot = -1; a.pad = pick(pads); a.tx = a.pad; a.ty = Draw.waterY(S.lake) - 1; return; }
@@ -325,7 +328,7 @@
   function updateAnimal(a, dt) {
     const sp = ANIMALS[a.sp]; const active = activeNow(sp);
     a.anim += dt;
-    if (sp.kind === 'lake') a.y = Draw.waterY(S.lake) + a.depth + Math.sin(a.anim * 2) * 1.5;
+    if (sp.kind === 'lake') { const wy = Draw.waterY(S.lake) + a.depth + Math.sin(a.anim * 2) * 1.5; if (sp.amphibious) { const want = a.x < WORLD.LAKE_X - 15 ? GY : wy; a.y += (want - a.y) * Math.min(1, dt * 3); } else a.y = wy; }
     if (a.pad != null && sp.kind === 'ground') { a.ty = Draw.waterY(S.lake) - 1; if (a.state === 'idle' || a.state === 'eating') a.y = a.ty; }
     if (sp.swims && a.x > WORLD.LAKE_X + 40 && a.state !== 'fetch' && a.state !== 'moving') a.y = Draw.waterY(S.lake) + 3 + Math.sin(a.anim * 2) * 1.5;
     if (a.sp === 'beaver' && updateBeaver(a, dt)) return;
@@ -353,8 +356,9 @@
       case 'homing': // woke up on the way home: carry on to a new target
         a.state = 'idle'; a.timer = 0.5; break;
       case 'arriving': case 'moving': {
-        if (moveToward(a, dt, sp.speed)) {
+        if (moveToward(a, dt, sp.speed * (a.rolling ? 2.4 : 1))) {
           a.state = 'idle'; a.timer = rand(sp.kind === 'bug' ? 3 : 6, 14);
+          if (a.sp === 'armadillo') { a.rolling = false; a.curled = Math.random() < 0.3; }
           if (!active) a.state = 'sleep'; else tryEat(a);
         }
         break;
@@ -532,6 +536,7 @@
   // ---------- draw ----------
   function draw() {
     const t = performance.now() / 1000, ph = phase(), frac = ph / WORLD.CYCLE, night = Draw.nightFactor(frac);
+    if (!W || !H || !(cam.scale > 0)) return; // nothing to draw into yet (hidden tab, zero-size canvas)
     const skyTop = -cam.offY / cam.scale, above = GY - skyTop;
     Draw.setView({ skyTop, stretch: clamp(above / 480, 1, 2.3), boost: clamp(Math.pow(1 / cam.zoom, 0.4), 1, 1.3) });
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -604,9 +609,10 @@
     if (!moving && sp.kind === 'bug' && a.state !== 'sleep') y += Math.sin(a.anim * 8) * 2;
     if (a.state === 'eating') y += Math.abs(Math.sin(a.anim * 10)) * -2;
     if (moving && a.sp === 'frog') y -= Math.abs(Math.sin(a.anim * 7)) * 14;
+    const ball = a.sp === 'armadillo' && ((moving && a.rolling) || (!moving && a.curled && a.state !== 'eating'));
     const hang = a.sp === 'bat' && a.state === 'sleep';
     if (hang) { c.save(); c.translate(0, 2 * (y - 40)); c.scale(1, -1); }
-    const head = Draw.drawCritter(c, { x: a.x, y, sp: a.sp, acc: a.acc }, { c1: a.c1, c2: a.c2, t: a.anim, moving, closed: a.state === 'sleep', face: a.face, size: 1 });
+    const head = Draw.drawCritter(c, { x: a.x, y, sp: ball ? 'armadilloBall' : a.sp, acc: a.acc }, { c1: a.c1, c2: a.c2, t: a.anim, moving, closed: a.state === 'sleep', face: a.face, size: 1, rot: a.x * 0.09, peek: !moving });
     if (hang) c.restore();
     if (plain) return;
     if (head) {
@@ -751,7 +757,7 @@
   }
   function hoverLabel(h) {
     switch (h.type) {
-      case 'animal': return (h.a.named ? h.a.name : ANIMALS[h.a.sp].name) + (h.a.state === 'sleep' ? ' 💤' : h.a.state === 'eating' ? ' 😋' : '');
+      case 'animal': return (h.a.named ? h.a.name : ANIMALS[h.a.sp].name) + (h.a.state === 'sleep' ? ' 💤' : h.a.state === 'eating' ? ' 😋' : h.a.sp === 'armadillo' && (h.a.rolling || h.a.curled) ? ' 🏐' : h.a.onLand && h.a.x < WORLD.LAKE_X ? ' ☀️' : '');
       case 'person': return h.pe.name;
       case 'sky': return `${h.sun ? '☀️' : '🌙'} ${h.body.name}`;
       case 'stick': return '🪵 Stick · tap to pick up';
@@ -810,7 +816,7 @@
   }
   function renderSeedBar() {
     const bar = $('seedbar'); bar.innerHTML = '';
-    const land = S.unlocked.filter(k => PLANTS[k].kind !== 'water'), water = S.unlocked.filter(k => PLANTS[k].kind === 'water');
+    const trees = sortedSeeds(S.unlocked.filter(k => PLANTS[k].kind === 'tree')), flowers = sortedSeeds(S.unlocked.filter(k => PLANTS[k].kind === 'flower' || PLANTS[k].kind === 'bush')), water = sortedSeeds(S.unlocked.filter(k => PLANTS[k].kind === 'water'));
     const addChip = k => {
       const d = PLANTS[k], n = S.seeds[k] || 0;
       const chip = document.createElement('button');
@@ -826,7 +832,8 @@
       bar.appendChild(chip);
     };
     const group = (label, keys) => { const g = el('div', 'seedgroup'); g.appendChild(el('span', 'grouplbl', label)); bar.appendChild(g); keys.forEach(addChip); };
-    if (water.length) { group('🌱 land', land); group('💧 lake', water); } else land.forEach(addChip);
+    const groups = [['🌳 trees', trees], ['🌸 flowers', flowers], ['💧 lake', water]].filter(gp => gp[1].length);
+    if (groups.length > 1) groups.forEach(gp => group(gp[0], gp[1])); else groups.forEach(gp => gp[1].forEach(addChip));
   }
 
   // ---------- "What now?" helper ----------
@@ -945,7 +952,7 @@
   }
   function seedGrid(filterFn, onPick) {
     const grid = el('div', 'seedgrid'); let any = false;
-    for (const k of S.unlocked) {
+    for (const k of sortedSeeds(S.unlocked)) {
       if (!filterFn(k)) continue; any = true;
       const d = PLANTS[k], n = S.seeds[k] || 0;
       const b = el('button', 'seedbtn' + (n ? '' : ' empty'));
@@ -1085,6 +1092,7 @@
       <li>👀 On any name card, <b>Zoom in and watch</b> follows that animal or person around. Swipe to stop.</li>
       <li>⏸️ The pause button stops time. The game also pauses by itself when you switch apps.</li>
       <li>🦫 When the beaver arrives, grown trees drop sticks. <b>Tap sticks</b> (or let the beaver fetch them) and it builds a dam in 3 stages, and a full lake spills over the dam!</li>
+      <li>🐊 The crocodile climbs out to sun itself on the bank, and the armadillo rolls around as a ball.</li>
       <li>🐸 Frogs hop onto the lily pads under the waterfall. Bats sleep in the cave by day, and the bear sleeps there at night.</li>
       <li>↩️ The small ↩️ button on a name card puts the look back to how it started (an animal then loses its name tag).</li>
       <li>🖱️ Point at a seed in the bar to see what it grows into and who loves it.</li>
@@ -1133,6 +1141,7 @@
       `Start with 1 explorer; one more arrives at each sunrise until ${R.people.max}. Newcomer walks in from the left, clears ${R.slots.perNewcomer} spots and asks for a name and look.`,
       `The sun and moon can be named and dressed up like anyone else; their sheet also has a button that jumps time to the next sunset or sunrise.`,
       `Beaver: arrives at lake ≥ 70% with 3 grown trees. While it is around and the dam is unfinished, a grown land tree drops a stick every ${R.beaver.stickEvery}s (max ${R.beaver.maxSticks} lying about). Tapping a stick or the beaver fetching it adds 1 wood. Each dam stage costs ${R.beaver.sticksPerStage} wood and takes ${R.beaver.buildTime}s to build; the lake floor becomes ${R.beaver.floorByStage.map(pct).join(' → ')} by stage. With any dam built, a lake above ${pct(R.beaver.spillAt)} spills over the dam.`,
+      `The crocodile is amphibious: 40% of its moves go to the bank (x ${WORLD.LAKE_X - 190}–${WORLD.LAKE_X - 50}) where it climbs out and suns itself. The armadillo rolls up for 60% of its trips (2.4× speed, drawn as a ball) and stays curled for 30% of its rests.`,
       `Lake animals keep to zones (fractions of the open water, shore 0 → falls 1): ${Object.values(ANIMALS).filter(a => a.zone).map(a => `${a.name} ${a.zone.join('–')}`).join(', ')}. The otter rides the waterfall down 45% of the time it gets bored. Bugs pick lilies only 30% of the time.`,
       `Idle people wander by day and sleep standing at night (they still get up for planting tasks). Queued tasks go to the closest person with nothing to do.`,
     ]);

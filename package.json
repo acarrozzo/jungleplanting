@@ -1,0 +1,10 @@
+{
+  "name": "jungle-planting",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A cozy jungle planting game for kids. Plain HTML, no build step.",
+  "scripts": {
+    "dev": "python3 -m http.server 8787 --bind 127.0.0.1",
+    "start": "python3 -m http.server 8787"
+  }
+}

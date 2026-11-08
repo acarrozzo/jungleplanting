@@ -7,10 +7,16 @@ A cozy browser game for planting seeds in the jungle, watching tall trees grow, 
 Open `index.html` in a browser, or serve the folder:
 
 ```bash
-python3 -m http.server 8787
+npm run dev
 ```
 
+(that just runs `python3 -m http.server 8787`)
+
 then visit http://localhost:8787 (on a phone on the same wifi, use the computer's IP address instead of localhost).
+
+## Deploy
+
+It is a static site, so any static host works. For Vercel: import the GitHub repo at vercel.com/new, leave the framework as **Other** with no build command, and deploy. `vercel.json` only sets no-cache headers so updates show up right away. On an iPad, open the site in Safari, tap Share, then **Add to Home Screen** for a full-screen app with its own icon.
 
 ## How to play
 
@@ -29,7 +35,7 @@ then visit http://localhost:8787 (on a phone on the same wifi, use the computer'
 - Tap the thick jungle to clear a new spot for 3 seeds. A new friend also arrives every sunrise (up to 5) and clears 2 spots.
 - Tap any person or animal to rename it and pick colors and a hat. The ↩️ button on a name card restores the original look. The sun and moon can be dressed up too, and their sheet can call the next sunset or sunrise early.
 - The 🌱 button lists every plant you own with its growth, fruit, level and spot. Tap 👀 to jump to it.
-- Land seeds and lake seeds sit on their own sides of the seed bar. On a computer, point at a seed to see what it grows into and who loves it.
+- The seed bar groups seeds: trees first, then flowers, then lake plants. On a computer, point at a seed to see what it grows into and who loves it.
 - On a computer, point at anything and it glows softly with its name, handy when animals and plants overlap.
 - Every plant shows 1 to 3 stars under it for its level. Spare seeds of the same kind buy the next star.
 - Swipe or use the ◀ ▶ buttons to look around, ➕ ➖ (or pinch / mouse wheel) to zoom.

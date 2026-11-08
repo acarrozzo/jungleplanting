@@ -812,9 +812,23 @@ const Draw = (() => {
     ell(ctx, 20, -2, 7, 5, c2); eye(ctx, 23, -4, 1.6, o.closed); smile(ctx, 22, -1, 2);
     return { hx: 20, hy: -3, hr: 6 };
   };
+  // the armadillo curled up: a rolling armoured ball
+  C.armadilloBall = (ctx, o) => {
+    const { c1, c2 } = o;
+    ctx.save(); ctx.translate(0, -13); ctx.rotate(o.moving ? o.rot : 0);
+    circ(ctx, 0, 0, 13, c1);
+    for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(0, 0, 13, i * Math.PI / 2 + 0.25, i * Math.PI / 2 + 1.1); ctx.strokeStyle = c2; ctx.lineWidth = 3; ctx.stroke(); }
+    ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI * 2); ctx.strokeStyle = c2; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.restore();
+    if (!o.moving && o.peek) { circ(ctx, 9, -8, 4, c1); eye(ctx, 10, -9, 1.4, o.closed); } // peeking out while curled
+    ctx.globalAlpha = 0.25; ell(ctx, 0, 1, 12, 3, '#000'); ctx.globalAlpha = 1;
+    return { hx: 0, hy: -13, hr: 13 };
+  };
   C.crocodile = (ctx, o) => {
     const { c1, c2 } = o; const tw = Math.sin(o.t * 3) * 2;
     poly(ctx, [[-30, 0], [-50, -3 + tw], [-30, 4]], c1);
+    const lw = o.moving ? Math.sin(o.t * 8) * 2 : 0;
+    rrect(ctx, -22 + lw, 2, 7, 5, 2, shade(c1, -20)); rrect(ctx, 4 - lw, 2, 7, 5, 2, shade(c1, -20));
     ell(ctx, -8, 0, 26, 7, c1);
     for (let i = 0; i < 5; i++) poly(ctx, [[-28 + i * 9, -5], [-25 + i * 9, -10], [-22 + i * 9, -5]], c2);
     rrect(ctx, 14, -4, 26, 8, 4, c1); rrect(ctx, 16, -1, 24, 4, 3, shade(c1, 30));

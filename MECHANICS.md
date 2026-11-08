@@ -88,8 +88,8 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 - **bird** flies in from the side of the screen and perches on tree tops.
 - **climber** sits in a canopy (the tree frog sits lower on the trunk).
 - **bug** hovers at flowers and lilies.
-- **ground** walks in from the left along the ground. Capybara and frog prefer the lake shore. The frog hops (55% of the time it picks a target) onto a lily pad or a grown water lily and sits there at the water line.
-- **lake** swims in the lake, fish at a random depth. Each lake species keeps to a zone of the open water (0 = shore, 1 = falls): turtle 0 to 0.3, duck 0.15 to 0.6, crocodile 0.55 to 0.85, otter 0.85 to 1, fish anywhere. When the otter gets bored it rides the waterfall down into the plunge pool 45% of the time.
+- **ground** walks in from the left along the ground. The armadillo rolls into an armoured ball for 60% of its trips (2.4× speed) and stays curled up for 30% of its rests, peeking out. Capybara and frog prefer the lake shore. The frog hops (55% of the time it picks a target) onto a lily pad or a grown water lily and sits there at the water line.
+- **lake** swims in the lake, fish at a random depth. The crocodile is amphibious: 40% of its moves head for the bank left of the lake, where it climbs out and suns itself, sliding back into the water on the way back. Each lake species keeps to a zone of the open water (0 = shore, 1 = falls): turtle 0 to 0.3, duck 0.15 to 0.6, crocodile 0.55 to 0.85, otter 0.85 to 1, fish anywhere. When the otter gets bored it rides the waterfall down into the plunge pool 45% of the time.
 - **bug** picks a lily only 30% of the time so the pond does not fill with bees and butterflies.
 - **glow** is the fireflies, which appear at a flower.
 - Picking a target: with a gift ready (or half the time anyway) an eater heads for a plant with fruit it likes. Otherwise a random plant of its kind, avoiding the one it is already on. Idle time between moves is 6 to 14 s (3 to 14 s for bugs).
