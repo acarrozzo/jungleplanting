@@ -36,6 +36,7 @@ It is a static site, so any static host works. For Vercel: import the GitHub rep
 - 📸 in the menu saves a picture of your jungle.
 - Days are 3 minutes, nights 1.5 minutes. Plants grow slower at night and faster in the rain. Rain also fills the lake.
 - Grown trees make fruit. Animals come to eat it and bring you seeds, including new kinds. Every new animal brings a welcome seed soon after it arrives.
+- The duck, otter and crocodile swim and also walk on land. The gorilla jumps up and hangs in the trees.
 - The first animals come for the starter trees and flowers. Bigger ones (sloth, tapir, owl, gorilla, jaguar, elephant) need more grown trees. The Jungle Book shows what each one is waiting for.
 - Tap a grown plant to make it bigger with spare seeds (up to level 3) or swap it for a new seed.
 - Tap the thick jungle to clear a new spot for 3 seeds. A new friend also arrives every sunrise (up to 5) and clears 2 spots.

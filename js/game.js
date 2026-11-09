@@ -38,6 +38,9 @@
   const landY = e => GY + (e.lane || 0); // feet of a person or ground animal in its depth lane
   const depthScale = y => clamp(0.9 + (y - GY) * 0.0055, 0.9, 1.12); // further back = a little smaller
   const frontLane = () => rand(...WORLD.LANES.animalFront), backLane = () => rand(...WORLD.LANES.animalBack);
+  const onShore = a => ANIMALS[a.sp].kind === 'lake' && a.x < WORLD.LAKE_X - 15; // a swimmer that has walked out onto the land
+  const inAir = a => a.state === 'jump' || a.state === 'hang' || a.state === 'drop'; // gorilla up in a tree
+  const depthY = a => inAir(a) ? landY(a) : a.y; // where an animal sorts and scales: its lane, even while it is up in the air
   const lakeFloor = () => Math.max(RULES.rain.lakeFloor, RULES.beaver.floorByStage[Math.min(S.dam.stage, 3)] || 0);
   const damCost = () => RULES.beaver.sticksPerStage;
   const damDone = () => S.dam.stage >= RULES.beaver.maxStage;
@@ -88,7 +91,7 @@
       // plants beyond the slot list (the old island) go back into the seed pocket
       s.plants = s.plants || []; s.plants.slice(TOTAL_SLOTS).forEach(p => { if (p) s.seeds[p.id] = (s.seeds[p.id] || 0) + 1; }); s.plants.length = Math.min(s.plants.length, TOTAL_SLOTS); s.sticks = s.sticks || []; s.stickT = s.stickT || 20;
       s.sun = s.sun || { name: 'Sunny', c1: '#ffd84a', c2: '#fff2a8', acc: 'none' }; s.moon = s.moon || { name: 'Luna', c1: '#f2f4ff', c2: '#d6dbf0', acc: 'none' };
-      for (const a of s.animals) { a.anim = a.anim || 0; if (['eating', 'play', 'drink', 'spray', 'toLake', 'toSpray', 'toTree', 'chopping'].includes(a.state)) a.state = 'idle'; a.bb = null; if (a.lane == null) a.lane = backLane(); }
+      for (const a of s.animals) { a.anim = a.anim || 0; if (['eating', 'play', 'drink', 'spray', 'toLake', 'toSpray', 'toTree', 'chopping', 'toClimb'].includes(a.state)) a.state = 'idle'; a.bb = null; if (a.lane == null) a.lane = backLane(); }
       s.playT = s.playT || rand(...RULES.play.gap); if (s.chop && !s.plants[s.chop.slot]) s.chop = null; s.chop = s.chop || null;
       for (const p of s.people) { p.anim = 0; p.moving = false; p.planting = false; p.bb = null; if (p.lane == null) p.lane = rand(...WORLD.LANES.person); if (p.task && (p.task.type === 'play' || p.task.type === 'visit')) p.task = null; if (p.task && (p.task.type === 'planting' || p.task.type === 'clearing')) p.task.type = p.task.type === 'planting' ? 'plant' : 'clear'; }
       // any pending seed that lost its planter goes back in the queue
@@ -393,7 +396,7 @@
     let choice = null;
     if (tasty.length && (a.giftT <= 0 || Math.random() < 0.5)) choice = pick(tasty);
     else if (pool.length) { const others = pool.filter(g => g.i !== a.slot); choice = pick(others.length ? others : pool); }
-    if (sp.kind === 'lake') { a.slot = -1; a.onLand = !!sp.amphibious && Math.random() < 0.4; if (a.onLand) a.lane = frontLane(); a.tx = a.onLand ? rand(WORLD.LAKE_X - 190, WORLD.LAKE_X - 50) : zoneX(sp); if (a.sp === 'fish') a.depth = rand(8, 48); return; }
+    if (sp.kind === 'lake') { a.slot = -1; a.onLand = Math.random() < (sp.amphibious || 0); if (a.onLand) a.lane = a.sp === 'crocodile' || Math.random() < 0.5 ? frontLane() : backLane(); a.tx = a.onLand ? rand(WORLD.LAKE_X - (sp.shore || 190), WORLD.LAKE_X - 45) : zoneX(sp); if (a.sp === 'fish') a.depth = rand(8, 48); return; }
     if (sp.kind === 'ground') {
       a.pad = null;
       if (a.sp === 'armadillo') a.rolling = Math.random() < 0.6;
@@ -439,11 +442,12 @@
       if (sp.kind === 'ground') { a.slot = -1; if (a.pad == null && a.state !== 'away' && !(sp.home === 'cave' && a.state === 'sleep')) { a.x = clamp(a.x, WORLD.LAND_X0 - 60, WORLD.LAKE_X - 40); a.y = landY(a); a.tx = a.x; a.ty = a.y; } }
       else if (sp.kind !== 'lake' && a.state !== 'away' && sp.home !== 'cave') { chooseTarget(a); if (a.state === 'sleep' || a.state === 'idle' || a.state === 'eating') { a.x = a.tx; a.y = a.ty; if (a.state === 'eating') a.state = 'idle'; } }
     }
-    if (sp.kind === 'lake') { const wy = Draw.waterY(S.lake) + a.depth + Math.sin(a.anim * 2) * 1.5; if (sp.amphibious) { const want = a.x < WORLD.LAKE_X - 15 ? landY(a) : wy; a.y += (want - a.y) * Math.min(1, dt * 3); } else a.y = wy; }
+    if (sp.kind === 'lake') { const wy = Draw.waterY(S.lake) + a.depth + Math.sin(a.anim * 2) * 1.5; if (sp.amphibious) { const dry = onShore(a), want = dry ? landY(a) : wy; a.y += (want - a.y) * Math.min(1, dt * 3); if (a.dry != null && a.dry !== dry && a.state !== 'slide') splash(WORLD.LAKE_X + 6, Draw.waterY(S.lake)); a.dry = dry; } else a.y = wy; }
     if (a.pad != null && sp.kind === 'ground') { a.ty = Draw.waterY(S.lake) - 1; if (a.state === 'idle' || a.state === 'eating') a.y = a.ty; }
     if (sp.swims && a.x > WORLD.LAKE_X + 40 && a.state !== 'fetch' && a.state !== 'moving') a.y = Draw.waterY(S.lake) + 3 + Math.sin(a.anim * 2) * 1.5;
     if (a.sp === 'beaver' && updateBeaver(a, dt)) return;
     if (a.sp === 'elephant' && updateElephant(a, dt)) return;
+    if (a.sp === 'gorilla' && updateGorilla(a, dt, active)) return;
     // a plant that was replanted under a perched animal: fly off and pick a new spot
     if (a.slot >= 0 && (!S.plants[a.slot] || S.plants[a.slot].pending) && a.state !== 'away' && a.state !== 'leaving') { a.slot = -1; if (a.state !== 'moving') { chooseTarget(a); a.state = 'moving'; } }
     if (a.state === 'away') { if (active) { a.state = 'arriving'; placeOffscreen(a); chooseTarget(a); if (sp.kind === 'glow') { a.state = 'idle'; a.x = a.tx; a.y = a.ty; } } return; }
@@ -456,7 +460,7 @@
       }
       if (sp.active === 'night') {
         if (sp.kind === 'glow') { a.state = 'away'; return; }
-        if (a.state !== 'leaving') { a.state = 'leaving'; a.tx = a.x < WORLD.W / 2 ? -100 : WORLD.W + 100; a.ty = sp.kind === 'ground' ? landY(a) : GY - 320; a.slot = -1; }
+        if (a.state !== 'leaving') { a.state = 'leaving'; a.tx = sp.kind === 'ground' || a.x < WORLD.W / 2 ? -100 : WORLD.W + 100; a.ty = sp.kind === 'ground' ? landY(a) : GY - 320; a.slot = -1; a.pad = null; } // walkers always leave by land, never through the lake
         if (moveToward(a, dt, sp.speed * 1.6)) a.state = 'away';
         return;
       }
@@ -491,9 +495,10 @@
           else if (!anyFoodPlanted(sp)) { if (Math.random() < RULES.animals.noFoodGiftChance) giveGift(a); a.giftT = sp.gift; }
         }
         if (a.timer <= 0) {
-          if (a.sp === 'otter' && Math.random() < 0.45) { a.state = 'slide'; a.timer = 1.1; Sound.play('splash'); break; }
+          if (a.sp === 'otter' && !onShore(a) && Math.random() < 0.45) { a.state = 'slide'; a.timer = 1.1; Sound.play('splash'); break; }
           if (a.sp === 'beaver' && beaverDecide(a)) break;
           if (a.sp === 'elephant' && elephantDecide(a)) break;
+          if (a.sp === 'gorilla' && gorillaDecide(a)) break;
           chooseTarget(a); a.state = 'moving';
         }
         break;
@@ -511,6 +516,51 @@
         break;
       }
     }
+  }
+  // ---------- gorilla: jumps up into a grown tree and hangs there, swinging ----------
+  // where the hands grip (low in the canopy, to one side of the trunk) and where the feet end up below it
+  function hangSpot(a) {
+    const p = S.plants[a.slot]; if (!p || p.pending || p.progress < 1) return null;
+    const m = Draw.plantMetrics(PLANTS[p.id], p.progress, p.level), k = depthScale(landY(a)), side = a.hangSide || 1;
+    const gx = slotX(a.slot) + side * m.R * 0.5, gy = Math.min(slotY(a.slot) + m.canopyY + m.R * 0.55, landY(a) - 86 * k - 48); // on a short tree, grip higher so the feet still dangle well clear of the grass
+    return { x: gx - 3 * side * k, y: gy + 86 * k };
+  }
+  function gorillaDecide(a) {
+    if (Math.random() > RULES.gorilla.hangChance) return false;
+    const trees = grownPlants().filter(g => g.d.kind === 'tree' && g.d.style !== 'bamboo' && g.i !== a.slot);
+    if (!trees.length) return false;
+    a.slot = pick(trees).i; a.hangSide = Math.random() < 0.5 ? -1 : 1; a.lane = frontLane();
+    const h = hangSpot(a); a.tx = h.x; a.ty = landY(a); a.state = 'toClimb';
+    return true;
+  }
+  function updateGorilla(a, dt, active) {
+    if (a.state !== 'toClimb' && !inAir(a)) return false;
+    const h = a.slot >= 0 ? hangSpot(a) : null;
+    if (a.state === 'drop' || !h) { // let go (or the tree is gone): fall back to the ground
+      if (!inAir(a)) { a.slot = -1; a.state = 'idle'; a.timer = 1; return true; }
+      a.state = 'drop'; a.vy = (a.vy || 0) + 1100 * dt; a.y += a.vy * dt;
+      if (a.y >= landY(a)) {
+        a.y = landY(a); a.vy = 0; a.state = 'idle'; a.timer = rand(3, 7); a.tx = a.x; a.ty = a.y; Sound.play('pop');
+        for (let i = 0; i < 6; i++) particles.push({ x: a.x + rand(-14, 14), y: a.y, vx: rand(-40, 40), vy: rand(-30, -5), life: 0.4, color: '#cfe8a8', r: 2.5 });
+      }
+      return true;
+    }
+    if (a.state === 'toClimb') {
+      if (!active) { a.slot = -1; a.state = 'idle'; a.timer = 0.5; return true; } // bedtime: no climbing tonight
+      a.tx = h.x; a.ty = landY(a);
+      if (moveToward(a, dt, ANIMALS.gorilla.speed)) { a.state = 'jump'; a.face = a.hangSide; a.jx = a.x; a.jy = a.y; a.jd = 0.4 + (a.y - h.y) / 500; a.timer = a.jd; Sound.play('ooh'); }
+      return true;
+    }
+    if (a.state === 'jump') {
+      a.timer -= dt; const k = clamp(1 - a.timer / a.jd, 0, 1), e = 1 - (1 - k) * (1 - k);
+      a.x = a.jx + (h.x - a.jx) * k; a.y = a.jy + (h.y - a.jy) * e;
+      if (k >= 1) { a.state = 'hang'; a.timer = rand(...RULES.gorilla.hangTime); for (let i = 0; i < 5; i++) particles.push({ x: h.x + rand(-16, 16), y: h.y - 86, vx: rand(-25, 25), vy: rand(10, 50), life: 0.9, color: '#6fbf4a', r: 2.5 }); }
+      return true;
+    }
+    a.x = h.x; a.y = h.y; a.timer -= dt; // hanging: stay with the tree as it sways or grows
+    if (!active) a.timer = Math.min(a.timer, 0.5);
+    if (a.timer <= 0) { a.state = 'drop'; a.vy = 0; }
+    return true;
   }
   // ---------- elephant: drinks at the lake, then sprays the plants ----------
   function elephantDecide(a) {
@@ -746,7 +796,7 @@
     Draw.drawDam(ctx, S.dam.stage, S.lake, t, S.dam.stage ? clamp((S.lake - RULES.beaver.spillAt) / (1 - RULES.beaver.spillAt), 0, 1) : 0);
     Draw.drawFalls(ctx, S.lake, t);
     WORLD.LILY_PADS.forEach((px, i) => Draw.drawLilyPad(ctx, px, Draw.waterY(S.lake), t, i));
-    for (const a of S.animals) if (ANIMALS[a.sp].kind === 'lake' && a.state !== 'away') { if (isHover('animal', a) && a.bb) drawGlow(a.bb, c => drawAnimal(a, t, c, true), t); drawAnimal(a, t); }
+    for (const a of S.animals) if (ANIMALS[a.sp].kind === 'lake' && a.state !== 'away' && !onShore(a)) { if (isHover('animal', a) && a.bb) drawGlow(a.bb, c => drawAnimal(a, t, c, true), t); drawAnimal(a, t); }
     Draw.drawWaterFront(ctx, S.lake);
 
     highlightT += 1 / 60;
@@ -772,7 +822,7 @@
     for (const f of fallen) ents.push({ y: PY + 0.5, fall: f });
     S.sticks.forEach((st, k) => ents.push({ y: STICK_Y, st, k }));
     for (const pe of S.people) ents.push({ y: pe.y, pe });
-    for (const a of S.animals) { const k = ANIMALS[a.sp].kind; if (k !== 'lake' && k !== 'glow' && a.state !== 'away') ents.push({ y: k === 'ground' ? a.y : 1e6, a }); }
+    for (const a of S.animals) { const k = ANIMALS[a.sp].kind; if (k === 'glow' || a.state === 'away' || (k === 'lake' && !onShore(a))) continue; ents.push({ y: k === 'ground' || k === 'lake' ? depthY(a) : 1e6, a }); }
     ents.sort((u, v) => u.y - v.y);
     for (const e of ents) {
       if (e.slot != null) drawSlot(e.slot);
@@ -812,7 +862,8 @@
   // c = context to draw on (the glow pass uses an offscreen one); plain = critter only, no tag or Zzz
   function drawAnimal(a, t, c = ctx, plain = false) {
     const sp = ANIMALS[a.sp];
-    const moving = ['moving', 'arriving', 'leaving', 'homing', 'fetch', 'toDam', 'toTree', 'toLake', 'toSpray'].includes(a.state);
+    const moving = ['moving', 'arriving', 'leaving', 'homing', 'fetch', 'toDam', 'toTree', 'toLake', 'toSpray', 'toClimb'].includes(a.state);
+    const dry = onShore(a), air = inAir(a);
     let y = a.y;
     if (moving && (sp.kind === 'bird' || sp.kind === 'bug')) y += Math.sin(a.anim * 6) * 3;
     if (!moving && sp.kind === 'bug' && a.state !== 'sleep') y += Math.sin(a.anim * 8) * 2;
@@ -823,7 +874,7 @@
     const ball = a.sp === 'armadillo' && ((moving && a.rolling) || (!moving && a.curled && a.state !== 'eating'));
     const hang = a.sp === 'bat' && a.state === 'sleep';
     if (hang) { c.save(); c.translate(0, 2 * (y - 40)); c.scale(1, -1); }
-    const head = Draw.drawCritter(c, { x: a.x, y, sp: ball ? 'armadilloBall' : a.sp, acc: a.acc }, { c1: a.c1, c2: a.c2, t: a.anim, moving, closed: a.state === 'sleep', face: a.face, size: sp.kind === 'ground' ? depthScale(a.y) : 1, rot: a.x * 0.09, peek: !moving, pose: a.state === 'drink' || a.state === 'spray' ? a.state : null });
+    const head = Draw.drawCritter(c, { x: a.x, y, sp: ball ? 'armadilloBall' : a.sp, acc: a.acc }, { c1: a.c1, c2: a.c2, t: a.anim, moving, closed: a.state === 'sleep', face: a.face, size: sp.kind === 'ground' || dry ? depthScale(depthY(a)) : 1, rot: a.x * 0.09, peek: !moving, land: dry, pose: a.state === 'drink' || a.state === 'spray' ? a.state : air ? (a.state === 'hang' ? 'hang' : 'jump') : null });
     if (hang) c.restore();
     if (plain) return;
     if (head) {
@@ -831,7 +882,7 @@
       if (a.named) Draw.drawLabel(c, a.name, a.x, Math.min(head.hy - head.hr - 12, y - 46));
       if (a.state === 'play' && a.playEmoji) Draw.drawBubble(c, a.playEmoji, head.hx, Math.min(head.hy - head.hr - 12, y - 46) - (a.named ? 24 : 6), t);
     }
-    a.bb = { x: a.x - 36, y: y - 62, w: 72, h: 70 };
+    a.bb = air ? { x: a.x - 36, y: y - 96, w: 72, h: 100 } : { x: a.x - 36, y: y - 62, w: 72, h: 70 };
   }
   const isHover = (type, key) => !!hover && hover.type === type && (type === 'animal' ? hover.a === key : type === 'person' ? hover.pe === key : type === 'stick' ? hover.k === key : hover.i === key);
   // Soft glow that hugs the real shape: draw the thing onto an offscreen canvas, then paint only that image's blurred shadow underneath it.
@@ -973,7 +1024,7 @@
   }
   function hoverLabel(h) {
     switch (h.type) {
-      case 'animal': return (h.a.named ? h.a.name : ANIMALS[h.a.sp].name) + (h.a.state === 'sleep' ? ' 💤' : h.a.state === 'eating' ? ' 😋' : h.a.state === 'drink' ? ' 💧' : h.a.state === 'spray' ? ' 💦' : h.a.state === 'chopping' ? ' 🪓' : h.a.state === 'play' ? ' 💛' : h.a.sp === 'armadillo' && (h.a.rolling || h.a.curled) ? ' 🏐' : h.a.onLand && h.a.x < WORLD.LAKE_X ? ' ☀️' : '');
+      case 'animal': return (h.a.named ? h.a.name : ANIMALS[h.a.sp].name) + (h.a.state === 'sleep' ? ' 💤' : h.a.state === 'eating' ? ' 😋' : h.a.state === 'drink' ? ' 💧' : h.a.state === 'spray' ? ' 💦' : h.a.state === 'chopping' ? ' 🪓' : h.a.state === 'play' ? ' 💛' : h.a.state === 'hang' ? ' 🙌' : h.a.sp === 'armadillo' && (h.a.rolling || h.a.curled) ? ' 🏐' : h.a.sp === 'crocodile' && onShore(h.a) ? ' ☀️' : '');
       case 'person': return h.pe.name;
       case 'sky': return `${h.sun ? '☀️' : '🌙'} ${h.body.name}`;
       case 'stick': return '🪵 Stick · tap to pick up';
@@ -1303,7 +1354,8 @@
       <li>⛺ At night your people walk to the <b>tent</b> and sleep. They still get up if you ask them to plant.</li>
       <li>🐘 The elephant drinks from the lake, then <b>sprays water from its trunk</b>. Watered plants grow faster!</li>
       <li>💛 Now and then your people play with each other and with the animals. High fives, dances, tickles and nose boops!</li>
-      <li>🐊 The crocodile climbs out to sun itself on the bank, and the armadillo rolls around as a ball.</li>
+      <li>🐊 The crocodile climbs out to sun itself on the bank, the duck and otter walk on land too, and the armadillo rolls around as a ball.</li>
+      <li>🦍 The gorilla sometimes jumps up into a tree and hangs there, swinging.</li>
       <li>🐸 Frogs hop onto the lily pads under the waterfall. Bats sleep in the cave by day, and the bear sleeps there at night.</li>
       <li>↩️ The small ↩️ button on a name card puts the look back to how it started (an animal then loses its name tag).</li>
       <li>🖱️ Point at a seed in the bar to see what it grows into and who loves it.</li>
@@ -1352,7 +1404,7 @@
       `Start with 1 explorer; one more arrives at each sunrise until ${R.people.max}. Newcomer walks in from the left, clears ${R.slots.perNewcomer} spots and asks for a name and look.`,
       `The sun and moon can be named and dressed up like anyone else; their sheet also has a button that jumps time to the next sunset or sunrise.`,
       `Beaver: arrives at lake ≥ 70% with 3 grown trees. While it is around and the dam is unfinished, a grown land tree drops a stick every ${R.beaver.stickEvery}s (max ${R.beaver.maxSticks} lying about). Tapping a stick or the beaver fetching it adds 1 wood. Each dam stage costs ${R.beaver.sticksPerStage} wood and takes ${R.beaver.buildTime}s to build; the lake floor becomes ${R.beaver.floorByStage.map(pct).join(' → ')} by stage. With any dam built, a lake above ${pct(R.beaver.spillAt)} spills over the dam.`,
-      `The crocodile is amphibious: 40% of its moves go to the bank (x ${WORLD.LAKE_X - 190}–${WORLD.LAKE_X - 50}) where it climbs out and suns itself. The armadillo rolls up for 60% of its trips (2.4× speed, drawn as a ball) and stays curled for 30% of its rests.`,
+      `Amphibious swimmers leave the water for a share of their trips and walk up to a set distance from the lake: ${['crocodile', 'duck', 'otter'].map(k => `${ANIMALS[k].name} ${Math.round(ANIMALS[k].amphibious * 100)}% / ${ANIMALS[k].shore} units`).join(', ')}. The crocodile suns itself in front; the duck and otter pick behind or in front of the plants. The gorilla ends ${Math.round(RULES.gorilla.hangChance * 100)}% of its trips by jumping into a grown tree (not bamboo) and hanging for ${RULES.gorilla.hangTime.join('–')} s. Walking animals always leave by the left edge, never through the lake. The armadillo rolls up for 60% of its trips (2.4× speed, drawn as a ball) and stays curled for 30% of its rests.`,
       `Lake animals keep to zones (fractions of the open water, shore 0 → falls 1): ${Object.values(ANIMALS).filter(a => a.zone).map(a => `${a.name} ${a.zone.join('–')}`).join(', ')}. The otter rides the waterfall down 45% of the time it gets bored. Bugs pick lilies only 30% of the time.`,
       `Idle people wander by day. At night they walk forward to the tent in the foreground and sleep inside (hidden, Zzz over the tent) and come out a few seconds after sunrise. Queued tasks go to the closest awake person with nothing to do; if everyone is asleep, the closest sleeper gets up.`,
       `Friendly play: every ${rng(R.play.gap)} of daytime one free person picks another free person or an idle ground animal (55% animal when both exist), walks over (gives up after ${R.play.chase}s) and they play for ${R.play.time}s: ${PLAYS.person.map(x => x.act).join(', ')} with people; ${PLAYS.animal.map(x => x.act).join(', ')} with animals. Pure decoration, no rewards.`,

@@ -783,6 +783,22 @@ const Draw = (() => {
   };
   C.gorilla = (ctx, o) => {
     const { c1, c2 } = o; const sw = o.moving ? Math.sin(o.t * 9) * 4 : 0;
+    if (o.pose === 'hang' || o.pose === 'jump') { // arms up; hanging swings from the grip point and sometimes lets one hand go to wave
+      const hang = o.pose === 'hang', gx = 3, gy = -86, rot = hang ? Math.sin(o.t * 2.4) * 0.2 : 0;
+      const kick = hang ? Math.sin(o.t * 2.4 + 1.2) * 3 : 0, wave = hang && Math.sin(o.t * 0.9) > 0.55;
+      ctx.translate(gx, gy); ctx.rotate(rot); ctx.translate(-gx, -gy);
+      rrect(ctx, -16 - kick, -13, 10, hang ? 15 : 11, 4, c1); rrect(ctx, 6 + kick, -13, 10, hang ? 15 : 11, 4, c1);
+      ell(ctx, 0, -32, 24, 24, c1); ell(ctx, 2, -28, 13, 13, c2);
+      line(ctx, 20, -40, 23, -84, c1, 10); circ(ctx, 23, -86, 6.5, shade(c1, 20));
+      if (wave) { const wx = -34 + Math.sin(o.t * 9) * 5; line(ctx, -19, -40, wx, -62, c1, 10); circ(ctx, wx, -64, 6, shade(c1, 20)); }
+      else { line(ctx, -19, -40, -17, -84, c1, 10); circ(ctx, -17, -86, 6.5, shade(c1, 20)); }
+      circ(ctx, 4, -54, 14, c1); circ(ctx, -8, -52, 4, c1); circ(ctx, 16, -52, 4, c1);
+      ell(ctx, 6, -50, 9, 8, c2); rrect(ctx, -3, -58, 16, 5, 2, c1);
+      eye(ctx, 2, -55, 2.2, o.closed); eye(ctx, 10, -55, 2.2, o.closed);
+      circ(ctx, 4, -48, 1.3, '#222'); circ(ctx, 8, -48, 1.3, '#222'); smile(ctx, 6, -46.5, 4);
+      const dx = 4 - gx, dy = -54 - gy, cs = Math.cos(rot), sn = Math.sin(rot);
+      return { hx: gx + dx * cs - dy * sn, hy: gy + dx * sn + dy * cs, hr: 14 };
+    }
     rrect(ctx, -16 + sw, -14, 10, 14, 4, c1); rrect(ctx, 6 - sw, -14, 10, 14, 4, c1);
     ell(ctx, 0, -32, 24, 24, c1); ell(ctx, 2, -28, 13, 13, c2);
     line(ctx, -18, -36, -26 - sw * 0.5, -4, c1, 10); line(ctx, 18, -36, 26 + sw * 0.5, -4, c1, 10);
@@ -929,12 +945,18 @@ const Draw = (() => {
   };
   C.duck = (ctx, o) => {
     const { c1, c2 } = o;
+    if (o.land) { // out of the water: orange legs and a waddle
+      const w = o.moving ? Math.sin(o.t * 11) : 0;
+      line(ctx, -3, -3, -3 + w * 3, 0, c2, 2.5); line(ctx, 4, -3, 4 - w * 3, 0, c2, 2.5);
+      ell(ctx, -1 + w * 3, 0, 4.5, 1.8, c2); ell(ctx, 6 - w * 3, 0, 4.5, 1.8, c2);
+      ctx.translate(0, -7); ctx.rotate(w * 0.09);
+    }
     ell(ctx, 0, -5, 14, 9, c1); ell(ctx, -4, -7, 7, 5, shade(c1, -25), -0.3);
     poly(ctx, [[-12, -8], [-22, -14], [-13, -3]], c1);
     circ(ctx, 11, -19, 8, c1);
     ell(ctx, 20, -17, 6, 3, c2); line(ctx, 15, -17, 25, -17, shade(c2, -40), 1);
     eye(ctx, 13, -21, 2, o.closed);
-    return { hx: 11, hy: -19, hr: 8 };
+    return { hx: 11, hy: o.land ? -26 : -19, hr: 8 };
   };
   C.frog = (ctx, o) => {
     const { c1, c2 } = o;
@@ -947,14 +969,19 @@ const Draw = (() => {
   };
   C.otter = (ctx, o) => {
     const { c1, c2 } = o; const tw = Math.sin(o.t * 5) * 2;
+    if (o.land) { // out of the water: up on four short legs
+      const w = o.moving ? Math.sin(o.t * 12) * 3 : 0, dk = shade(c1, -25);
+      line(ctx, -12, -6, -12 + w, -1, dk, 5); line(ctx, -5, -6, -5 - w, -1, dk, 5); line(ctx, 8, -6, 8 - w, -1, dk, 5); line(ctx, 15, -6, 15 + w, -1, dk, 5);
+      ctx.translate(0, -10 - (o.moving ? Math.abs(Math.sin(o.t * 12)) * 1.5 : 0));
+    }
     line(ctx, -18, 0, -32, -4 + tw, c1, 5);
     ell(ctx, 0, 0, 21, 8, c1); ell(ctx, 2, 2, 14, 4, c2);
-    line(ctx, 6, -2, 12, -8, c1, 4); line(ctx, -2, -2, -6, -8, c1, 4);
+    if (!o.land) { line(ctx, 6, -2, 12, -8, c1, 4); line(ctx, -2, -2, -6, -8, c1, 4); }
     circ(ctx, 20, -8, 8, c1); circ(ctx, 14, -14, 3, c1); circ(ctx, 24, -15, 3, c1);
     ell(ctx, 24, -6, 5, 3.5, c2); circ(ctx, 27, -8, 1.6, '#222');
     line(ctx, 25, -5, 33, -4, '#fff', 1); line(ctx, 25, -5, 33, -7, '#fff', 1);
     eye(ctx, 20, -10, 2, o.closed);
-    return { hx: 20, hy: -9, hr: 8 };
+    return { hx: 20, hy: o.land ? -19 : -9, hr: 8 };
   };
 
   // Draws an animal at (x,y) (feet / waterline point). Returns head position in world coords.
