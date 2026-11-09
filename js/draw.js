@@ -210,8 +210,11 @@ const Draw = (() => {
     ell(ctx, cx - 36, gy + 2, 9, 5, '#6b5a48'); ell(ctx, cx + 48, gy + 3, 11, 6, '#4a3b2d'); ell(ctx, cx + 30, gy + 4, 6, 3.5, '#6b5a48');
   }
   // --- the camp: a tent the people sleep in, and a little campfire that burns at night ---
+  const CAMP_K = 1.1; // the camp is nearest the camera, so it is drawn a touch bigger
+  function campSpace(ctx) { ctx.save(); ctx.translate(WORLD.TENT_X, WORLD.GROUND_Y + WORLD.TENT_DY); ctx.scale(CAMP_K, CAMP_K); }
   function drawTent(ctx, t, night, sleepers) {
-    const gy = WORLD.GROUND_Y, x = WORLD.TENT_X, by = gy + 6, w = 58, h = 82;
+    campSpace(ctx); // local coordinates: tent base centre at 0,0
+    const gy = -6, x = 0, by = 0, w = 58, h = 82;
     ctx.globalAlpha = 0.22; ell(ctx, x, by + 1, w + 12, 7, '#000'); ctx.globalAlpha = 1;
     // guy ropes and pegs
     line(ctx, x - w * 0.55, by - h * 0.45, x - w - 16, by + 2, '#e6d5ac', 1.5); line(ctx, x + w * 0.55, by - h * 0.45, x + w + 16, by + 2, '#e6d5ac', 1.5);
@@ -241,16 +244,19 @@ const Draw = (() => {
       poly(ctx, [[fx - 4, fy - 5], [fx + Math.sin(t * 13) * 1.5, fy - 15 * f], [fx + 4, fy - 5]], '#ffe066');
       ctx.globalAlpha = 1;
     }
+    ctx.restore();
   }
   // warm light painted after the night tint, so the camp glows in the dark
   function drawCampGlow(ctx, t, night) {
     if (night <= 0.05) return;
-    const gy = WORLD.GROUND_Y, fx = WORLD.TENT_X + 84, fy = gy - 4, r = 74 + Math.sin(t * 9) * 4;
+    campSpace(ctx);
+    const fx = 84, fy = -10, r = 74 + Math.sin(t * 9) * 4;
     const g = ctx.createRadialGradient(fx, fy, 0, fx, fy, r);
     g.addColorStop(0, `rgba(255,190,90,${0.5 * night})`); g.addColorStop(1, 'rgba(255,190,90,0)');
     ctx.fillStyle = g; ctx.fillRect(fx - r, fy - r, r * 2, r * 2);
-    const f = 0.85 + 0.15 * Math.sin(t * 11), y0 = gy + 9;
+    const f = 0.85 + 0.15 * Math.sin(t * 11), y0 = 3;
     poly(ctx, [[fx - 4, y0 - 5], [fx + Math.sin(t * 13) * 1.5, y0 - 15 * f], [fx + 4, y0 - 5]], '#ffe066');
+    ctx.restore();
   }
   // little thought bubble with an emoji, shown over people and animals while they play
   function drawBubble(ctx, emoji, x, y, t) {
@@ -312,8 +318,8 @@ const Draw = (() => {
   }
   // round "plant here" button under an empty spot; hot = a seed is picked so it bounces
   function drawPlantButton(ctx, x, y, t, hot) {
-    const by = y + 44 - (hot ? Math.abs(Math.sin(t * 5)) * 4 : 0), r = 12;
-    ctx.globalAlpha = 0.35; ell(ctx, x, y + 46, r + 2, 4, '#000'); ctx.globalAlpha = 1;
+    const by = y + 30 - (hot ? Math.abs(Math.sin(t * 5)) * 4 : 0), r = 12;
+    ctx.globalAlpha = 0.35; ell(ctx, x, y + 32, r + 2, 4, '#000'); ctx.globalAlpha = 1;
     circ(ctx, x, by, r, hot ? '#ffd21f' : '#ffffff');
     ctx.strokeStyle = hot ? '#b8860b' : '#2e8b3a'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, by, r, 0, TAU); ctx.stroke();
     line(ctx, x - 6, by, x + 6, by, '#2e8b3a', 3.5); line(ctx, x, by - 6, x, by + 6, '#2e8b3a', 3.5);
@@ -380,7 +386,7 @@ const Draw = (() => {
 
   // --- plants ---
   // level (1-3) makes an upgraded plant bigger.
-  const UI_DY = 38; // stars and grow bar sit this far under a land plant, in front of everyone's feet
+  const UI_DY = 24; // stars and grow bar sit this far under a land plant, below the feet of animals standing in front of it
   function levelScale(level) { return 1 + RULES.upgrade.sizePerLevel * ((level || 1) - 1); }
   function plantMetrics(def, progress, level) {
     const pr = Math.min(1, progress);

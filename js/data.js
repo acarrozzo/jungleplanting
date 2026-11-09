@@ -5,15 +5,18 @@ const WORLD = {
   W: 1700, H: 560, GROUND_Y: 430,
   LAKE_FLOOR: 115,        // how far below the ground the lake bottom is
   CAVE_X: 85,             // the cave on the left; bats sleep in it by day, the bear at night
-  TENT_X: 290,            // the camp: people sleep in the tent at night, a campfire burns beside it
+  TENT_X: 200, TENT_DY: 84, // the camp sits in the lower foreground (84 below the ground line): people sleep in the tent at night, a campfire burns beside it
+  LAND_X0: 250,           // left edge of where people and animals wander (just right of the cave hill)
   LAKE_X: 1270,           // where the lake basin starts
-  SLOT_X0: 440, SLOT_DX: 84, MAX_SLOTS: 10, // 10 land spots, 84 apart so neighbouring trees overlap less
-  LAKE_SLOTS: [1385, 1500],       // x positions of the 2 floating water-plant spots (12 plots in all)
+  SLOT_X0: 320, SLOT_DX: 82, MAX_SLOTS: 12, // 12 land spots, 82 apart so neighbouring trees overlap less
+  LAKE_SLOTS: [1385, 1500],       // x positions of the 2 floating water-plant spots (14 plots in all)
   LILY_PADS: [1335, 1442, 1558],  // decorative pads frogs hop onto
   DAM_X: 1610,            // where the beaver builds the dam
   FALLS_X: 1658,          // the waterfall cliff starts here
-  // depth lanes: how far below the ground line feet stand. Plants sit on the line, animals a bit in front, people in front of them.
-  LANES: { animal: [5, 13], person: [16, 24] },
+  // Depth: how far below the ground line things stand (lower on screen = nearer). People keep to the back, plants grow on a front row,
+  // and animals walk either behind the plant row or out in front of it. Things further back are also drawn a little smaller.
+  PLANT_DY: 22,
+  LANES: { person: [0, 6], animalBack: [9, 15], animalFront: [28, 36] },
   DAY: 180, NIGHT: 90,    // seconds (3 minute day, 1.5 minute night)
 };
 WORLD.CYCLE = WORLD.DAY + WORLD.NIGHT;

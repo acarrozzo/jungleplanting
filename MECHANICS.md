@@ -13,12 +13,12 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 
 ## World and time
 
-- The world is 1700 × 560 units. Ground is at y = 430 and is grass all the way down. A cave sits at x = 85 on the left and the camp (tent and campfire) at x = 290. The lake basin starts at x = 1270, is 115 units deep (seaweed sways on the bottom) and ends at a waterfall cliff at x = 1658. The beaver's dam goes at x = 1610.
-- 12 plots in all: 10 land planting spots every 84 units from x = 440, and 2 floating lake spots at x = 1385 and 1500 that take water plants only. Three decorative lily pads float at x = 1335, 1442, 1558.
-- Depth lanes keep overlapping things readable: plants stand on the ground line, ground animals stand 5 to 13 units in front of it, people 16 to 24 units in front, and the level stars, grow bars and + buttons sit 38 to 44 units below the line, under everyone's feet. Draw order follows the lane, so people are always in front of animals and animals in front of trunks.
+- The world is 1700 × 560 units. Ground is at y = 430 and is grass all the way down. A cave sits at x = 85 on the left. The camp (tent and campfire) sits in the lower foreground at x = 200, 84 units below the ground line, so it takes no room on the planting row. The lake basin starts at x = 1270, is 115 units deep (seaweed sways on the bottom) and ends at a waterfall cliff at x = 1658. The beaver's dam goes at x = 1610.
+- 14 plots in all: 12 land planting spots every 82 units from x = 320, and 2 floating lake spots at x = 1385 and 1500 that take water plants only. Three decorative lily pads float at x = 1335, 1442, 1558.
+- **Depth.** Lower on screen means nearer. Measured in units below the ground line: people walk at 0 to 6 (the back), animals behind the plants at 9 to 15, the plant row is at 22, animals in front of the plants at 28 to 36, then the level stars and grow bars (46) and + buttons (52), and the camp at 84. Everything on land is painted back to front in one pass, and drawn from 90% size at the back to 112% at the front. An animal visiting a plant (to eat, be watered, chop) stands in front of it. A wandering animal picks the front or back lane 50/50 each trip and drifts between them as it walks. Birds, climbers and bugs are always on top. Lane numbers live in `WORLD.LANES` and `WORLD.PLANT_DY`.
 - A day is 180 s of daylight plus 90 s of night (270 s). A new jungle starts 25 s into Day 1. The day number is `floor(t / 270) + 1`; when it changes, sunrise happens.
 - Game time only advances while the page is open, no sheet is showing and the game is not paused. The ⏸️ button pauses; switching apps or tabs pauses automatically. There is no offline growth.
-- Autosave every 5 s and whenever the tab hides, to `localStorage` under `junglePlanting.save.v1` (save format version 3). Version 2 saves (16 + 3 spots) are migrated on load: the first 10 land plants and 2 lake plants are kept, the rest are refunded as seeds (including the seeds spent on their levels), and everyone is moved into the smaller world.
+- Autosave every 5 s and whenever the tab hides, to `localStorage` under `junglePlanting.save.v1` (save format version 4). Older saves are migrated on load. Version 2 (16 + 3 spots): the first 12 land plants and 2 lake plants are kept and the rest refunded as seeds, including the seeds spent on their levels. Version 3 (10 + 2 spots): the lake plants move to the new lake indexes and people and animals are put back on their lanes.
 
 ## Customizing
 
@@ -40,13 +40,13 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 
 ## Camera
 
-- Base scale fits the full world height, or 420 world units of width on portrait phones, whichever is smaller. Zoom multiplies that, up to 2.4. On screens 900 px or wider (so a 1024 px iPad and up) you can zoom out until the whole world fits, cave to waterfall. Narrower screens stop at 0.55.
+- Base scale fits the full world height, or 420 world units of width on portrait phones, whichever is smaller. Zoom multiplies that, up to 2.4. On screens 900 px or wider (so a 1024 px iPad and up) you can zoom out until the whole world fits, cave to waterfall. Narrower screens stop at 0.55. The ground line sits 70% of the way down a wide screen (75% on a tall one) so the foreground and the camp are in view.
 - Zoomed out, the sun and moon arc higher (peak 90 units below the top of the screen), stars and clouds spread into the extra sky, the backdrop stretches up to 2.3× and foreground plants grow up to 30% taller (`view.boost` in draw.js, applied inside `plantMetrics` so perches and hit boxes follow).
 - Drag to scroll, drag vertically when zoomed in. The ◀ ▶ buttons scroll while held and hop half a screen on a tap under 220 ms. Pinch and mouse wheel zoom around the pointer.
 
 ## Planting spots
 
-- 4 land spots are open at the start. Each newcomer opens 2 more. Tapping thick jungle lets you spend 3 seeds of one kind to have a person clear 1 spot right away. Maximum 10. Lake spots are always open.
+- 4 land spots are open at the start. Each newcomer opens 2 more, so all 12 are open once the fifth person has arrived. Tapping thick jungle lets you spend 3 seeds of one kind to have a person clear 1 spot right away. Lake spots are always open.
 - Every open empty spot shows a round + button under it. Tapping the spot or the button with a seed selected plants it; the button bounces while a seed is picked. Without a selection, the seed picker opens, filtered to land or water seeds.
 
 ## People
@@ -54,8 +54,8 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 - You start with one explorer. One more arrives at each sunrise until there are 5. They walk in from the left, clear 2 spots, and the naming sheet opens.
 - Walking speed 75 units/s. Planting takes 0.9 s, clearing 1.4 s. Lake seeds are tossed from the shore.
 - Queued tasks go to the nearest awake person who is idle or just wandering. If everyone is asleep, the nearest sleeper gets up, does the job and goes back to bed.
-- **Tent**: at night every person without a job walks to the tent and sleeps inside (hidden, with Zzz over the tent and a lit doorway). The campfire beside it burns from dusk to dawn. They come out 0.5 to 5 s after sunrise. Tapping the tent says who is asleep.
-- **Friendly play**: every 25 to 60 s of daytime, one free person picks another free person or an idle ground animal on land (55% animal when both exist) and walks over, giving up after 14 s. They then play for 3.2 s with emoji bubbles and a floating caption. With people: high five, dance, silly joke, hug, wave, spin. With animals: gentle pats, a snack, a dance, peekaboo, tickles, a nose boop. It is decoration only and gives no rewards. The list lives in `PLAYS` in `js/data.js`.
+- **Tent**: at night every person without a job walks left and then forward to the tent in the foreground (growing a little as they come nearer) and sleeps inside, hidden, with Zzz over the tent. The campfire beside it burns from dusk to dawn. They come out 0.5 to 5 s after sunrise and walk back to the rear lane. Tapping the tent says who is asleep.
+- **Friendly play**: every 25 to 60 s of daytime, one free person picks another free person or an idle ground animal on land (55% animal when both exist) and walks over, giving up after 14 s. The person steps forward to the animal's lane, and they then play for 3.2 s with emoji bubbles and a floating caption. With people: high five, dance, silly joke, hug, wave, spin. With animals: gentle pats, a snack, a dance, peekaboo, tickles, a nose boop. It is decoration only and gives no rewards. The list lives in `PLAYS` in `js/data.js`.
 
 ## Growth
 
