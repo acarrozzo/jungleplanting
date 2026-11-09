@@ -13,11 +13,12 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 
 ## World and time
 
-- The world is 1900 × 560 units. Ground is at y = 430 and is grass all the way down. A cave sits at x = 85 on the left. The lake basin starts at x = 1450, is 115 units deep (seaweed sways on the bottom) and ends at a waterfall cliff at x = 1858. The beaver's dam goes at x = 1810.
-- 16 land planting spots sit every 80 units from x = 200. Three floating lake spots at x = 1540, 1615, 1690 take water plants only. Three decorative lily pads float at x = 1500, 1578, 1652.
+- The world is 1700 × 560 units. Ground is at y = 430 and is grass all the way down. A cave sits at x = 85 on the left and the camp (tent and campfire) at x = 290. The lake basin starts at x = 1270, is 115 units deep (seaweed sways on the bottom) and ends at a waterfall cliff at x = 1658. The beaver's dam goes at x = 1610.
+- 12 plots in all: 10 land planting spots every 84 units from x = 440, and 2 floating lake spots at x = 1385 and 1500 that take water plants only. Three decorative lily pads float at x = 1335, 1442, 1558.
+- Depth lanes keep overlapping things readable: plants stand on the ground line, ground animals stand 5 to 13 units in front of it, people 16 to 24 units in front, and the level stars, grow bars and + buttons sit 38 to 44 units below the line, under everyone's feet. Draw order follows the lane, so people are always in front of animals and animals in front of trunks.
 - A day is 180 s of daylight plus 90 s of night (270 s). A new jungle starts 25 s into Day 1. The day number is `floor(t / 270) + 1`; when it changes, sunrise happens.
 - Game time only advances while the page is open, no sheet is showing and the game is not paused. The ⏸️ button pauses; switching apps or tabs pauses automatically. There is no offline growth.
-- Autosave every 5 s and whenever the tab hides, to `localStorage` under `junglePlanting.save.v1` (save format version 2, with migration from version 1).
+- Autosave every 5 s and whenever the tab hides, to `localStorage` under `junglePlanting.save.v1` (save format version 3). Version 2 saves (16 + 3 spots) are migrated on load: the first 10 land plants and 2 lake plants are kept, the rest are refunded as seeds (including the seeds spent on their levels), and everyone is moved into the smaller world.
 
 ## Customizing
 
@@ -31,7 +32,7 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 
 ## Helping the player
 
-- 💡 **What now?** (yellow button above the seed bar) glides the camera to the most useful thing and says what to do, in this order: sticks to pick up, sometimes an unnamed animal, an empty spot you have a seed for, a plant you can upgrade, an unnamed animal, jungle you can clear, plants still growing, then general encouragement.
+- The 💡 What now? button was removed. The game no longer points the player at a next step.
 - 👀 **Watch**: every animal and person card (and the Jungle Book rows) has a Zoom in and watch button. The camera zooms to at least 1.7× and follows that entity until the player swipes, pinches, scrolls, zooms or taps the Watching pill.
 - **Follow the action**: when an animal arrives, a new seed kind appears or a dam stage finishes, the camera glides there. It stays put if a sheet is open, a seed is picked, a finger is on the screen, something is being watched, the game is paused, or the player moved the camera in the last 4 s. The menu has a toggle to turn following off (saved).
 - Every tap on the canvas draws a quick white ripple so a miss still gets feedback.
@@ -39,20 +40,22 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 
 ## Camera
 
-- Base scale fits the full world height, or 420 world units of width on portrait phones, whichever is smaller. Zoom multiplies that, clamped to 0.55 to 2.4.
+- Base scale fits the full world height, or 420 world units of width on portrait phones, whichever is smaller. Zoom multiplies that, up to 2.4. On screens 900 px or wider (so a 1024 px iPad and up) you can zoom out until the whole world fits, cave to waterfall. Narrower screens stop at 0.55.
 - Zoomed out, the sun and moon arc higher (peak 90 units below the top of the screen), stars and clouds spread into the extra sky, the backdrop stretches up to 2.3× and foreground plants grow up to 30% taller (`view.boost` in draw.js, applied inside `plantMetrics` so perches and hit boxes follow).
 - Drag to scroll, drag vertically when zoomed in. The ◀ ▶ buttons scroll while held and hop half a screen on a tap under 220 ms. Pinch and mouse wheel zoom around the pointer.
 
 ## Planting spots
 
-- 6 land spots are open at the start. Each newcomer opens 2 more. Tapping thick jungle lets you spend 3 seeds of one kind to have a person clear 1 spot right away. Maximum 16. Lake spots are always open.
+- 4 land spots are open at the start. Each newcomer opens 2 more. Tapping thick jungle lets you spend 3 seeds of one kind to have a person clear 1 spot right away. Maximum 10. Lake spots are always open.
 - Every open empty spot shows a round + button under it. Tapping the spot or the button with a seed selected plants it; the button bounces while a seed is picked. Without a selection, the seed picker opens, filtered to land or water seeds.
 
 ## People
 
 - You start with one explorer. One more arrives at each sunrise until there are 5. They walk in from the left, clear 2 spots, and the naming sheet opens.
-- Walking speed 75 units/s. Planting takes 0.9 s, clearing 1.4 s. Lake seeds are tossed from the shore (x = 920).
-- Queued tasks go to the nearest person who is idle or just wandering. Idle people wander by day and sleep standing up at night, but still get up for tasks.
+- Walking speed 75 units/s. Planting takes 0.9 s, clearing 1.4 s. Lake seeds are tossed from the shore.
+- Queued tasks go to the nearest awake person who is idle or just wandering. If everyone is asleep, the nearest sleeper gets up, does the job and goes back to bed.
+- **Tent**: at night every person without a job walks to the tent and sleeps inside (hidden, with Zzz over the tent and a lit doorway). The campfire beside it burns from dusk to dawn. They come out 0.5 to 5 s after sunrise. Tapping the tent says who is asleep.
+- **Friendly play**: every 25 to 60 s of daytime, one free person picks another free person or an idle ground animal on land (55% animal when both exist) and walks over, giving up after 14 s. They then play for 3.2 s with emoji bubbles and a floating caption. With people: high five, dance, silly joke, hug, wave, spin. With animals: gentle pats, a snack, a dance, peekaboo, tickles, a nose boop. It is decoration only and gives no rewards. The list lives in `PLAYS` in `js/data.js`.
 
 ## Growth
 
@@ -78,9 +81,9 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 ### Arrival
 
 - Every 15 s the game checks every species in order. A species may arrive if it is below its `max`, none of its members is away, it is its active time of day, and its `req` function returns true for the current stats (grown counts per plant id, total grown trees, grown fruit trees, grown flowers including lilies, lake level, which species are present).
-- Each eligible species arrives with 45% chance per check, or its own `chance` for rare ones (elephant 7%, jaguar 10%). At most 2 species arrive per check.
+- Each eligible species arrives with 45% chance per check, or its own `chance` for rare ones (elephant 10%, jaguar 10%). At most 2 species arrive per check.
 - Panda: comes when 2 bamboo are grown, eats bamboo, brings bamboo and berry seeds.
-- Requirements are tiered: the four starter trees and two flowers bring the first wave (toucan, parrot, hummingbird, butterflies, bees, monkey, lake animals). Tapir and owl need 5 grown trees, sloth and armadillo 6, gorilla 7, jaguar 9, elephant 11, bat 5 fruit trees, duck 3 flowers.
+- Requirements are tiered for 10 land spots: the four starter trees and two flowers bring the first wave (toucan, parrot, hummingbird, butterflies, bees, monkey, lake animals). Bear and tree frog need 3 grown trees, tapir, owl and armadillo 4 (bat: 4 fruit trees), sloth and gorilla 5, jaguar 6, elephant 7.
 - Animals never leave for good once they have arrived.
 
 ### Behaviour by kind
@@ -134,3 +137,15 @@ The save is the whole state object: time, lake, rain timers, seeds per kind, unl
 ## Debug console (`window.JP`)
 
 `JP.skip(sec)` fast-forwards game time. `JP.give(id, n)` grants seeds. `JP.focusSlot(i)` scrolls to a spot (0 to 15 land, 16 to 18 lake). `JP.state()` returns the live save object. `JP.hitTest(x, y)` says what a tap at world coordinates would hit. `JP.dev()` opens the Under the hood page. `JP.step()` draws one frame when the tab is hidden and animation is paused.
+
+## Elephant watering
+
+- When the elephant gets bored it may go for a drink, as long as it is not raining, the lake is above its floor, some land plant is not already wet, and its 45 s cooldown is over.
+- It walks to the shore and drinks for 2.5 s (the lake drops 3%), then walks to a land plant that is still growing (any land plant if none is) and sprays for 3.5 s with its trunk in the air.
+- That plant and any land plant within 90 units (its direct neighbours) are watered for 40 s: growth runs 2× and fruit 1.5× faster, on top of rain and night rates. Wet plants drip, and the plant sheet says the elephant watered it.
+
+## Beaver chopping a tree
+
+- While the dam is unfinished and the beaver is around, the sheet of a grown land tree has a "Let the beaver chop it down" button. One tree at a time.
+- The beaver walks over, gnaws for 4 s while the tree shakes, the tree falls over and the spot is empty again. It gives 4 wood, which is exactly one dam stage, and no seed back.
+- This is the second way to clear a spot. Replace still gives 1 seed back and opens the seed picker.

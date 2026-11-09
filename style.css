@@ -61,7 +61,6 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: 
 .optrow .acc { width: 28px; height: 28px; font-size: 15px; border-radius: 8px; border-width: 2px; padding: 0; }
 .card.compact button.big { padding: 12px; font-size: 17px; }
 @media (min-width: 600px) and (min-height: 300px) { #sheetCard:has(.card.compact) { width: min(96vw, 580px); } .custbody { grid-template-columns: 180px 1fr; align-items: start; } .custleft .inline { max-width: none; } }
-#btnHint { position: fixed; right: 10px; bottom: calc(84px + env(safe-area-inset-bottom)); width: 54px; height: 54px; font-size: 26px; background: linear-gradient(135deg, #ffe66b, #ffc21f); box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 4; }
 #watchPill { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(84px + env(safe-area-inset-bottom)); border: none; border-radius: 999px; background: rgba(27,42,29,0.92); color: #fff; font-weight: 800; font-size: 14px; padding: 10px 16px; cursor: pointer; z-index: 4; font-family: inherit; animation: pop .2s ease-out; }
 #watchPill.hidden { display: none; }
 #flash { position: fixed; inset: 0; background: #fff; z-index: 20; pointer-events: none; animation: flashout .35s ease-out forwards; }

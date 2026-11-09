@@ -209,7 +209,56 @@ const Draw = (() => {
     for (let k = 0; k < 4; k++) { const sx = cx - 26 + k * 17; poly(ctx, [[sx - 5, gy - 84 + k % 2 * 3], [sx + 5, gy - 84 + k % 2 * 3], [sx, gy - 70 - (k % 2) * 6]], '#3b2d22'); }
     ell(ctx, cx - 36, gy + 2, 9, 5, '#6b5a48'); ell(ctx, cx + 48, gy + 3, 11, 6, '#4a3b2d'); ell(ctx, cx + 30, gy + 4, 6, 3.5, '#6b5a48');
   }
-  // --- beaver things: sticks on the ground, the dam, the island ---
+  // --- the camp: a tent the people sleep in, and a little campfire that burns at night ---
+  function drawTent(ctx, t, night, sleepers) {
+    const gy = WORLD.GROUND_Y, x = WORLD.TENT_X, by = gy + 6, w = 58, h = 82;
+    ctx.globalAlpha = 0.22; ell(ctx, x, by + 1, w + 12, 7, '#000'); ctx.globalAlpha = 1;
+    // guy ropes and pegs
+    line(ctx, x - w * 0.55, by - h * 0.45, x - w - 16, by + 2, '#e6d5ac', 1.5); line(ctx, x + w * 0.55, by - h * 0.45, x + w + 16, by + 2, '#e6d5ac', 1.5);
+    rect(ctx, x - w - 18, by - 3, 3, 7, '#6b4320'); rect(ctx, x + w + 15, by - 3, 3, 7, '#6b4320');
+    // canvas: middle, shaded side, sunny side
+    poly(ctx, [[x - w, by], [x, by - h], [x + w, by]], '#f08a3c');
+    poly(ctx, [[x - w, by], [x, by - h], [x - w * 0.42, by]], '#d96a2a');
+    poly(ctx, [[x + w, by], [x, by - h], [x + w * 0.42, by]], '#ffa95a');
+    // doorway, lit from inside when someone is asleep in there
+    const warm = sleepers > 0 && night > 0.2;
+    poly(ctx, [[x - 21, by], [x, by - h * 0.74], [x + 21, by]], warm ? '#5a3418' : '#3a2415');
+    if (warm) { ctx.globalAlpha = 0.55 + 0.1 * Math.sin(t * 3); poly(ctx, [[x - 15, by], [x, by - h * 0.6], [x + 15, by]], '#ffcf70'); ctx.globalAlpha = 1; }
+    poly(ctx, [[x - 21, by], [x, by - h * 0.74], [x - 12, by - 14], [x - 16, by]], '#ffc78a'); // rolled-back flaps
+    poly(ctx, [[x + 21, by], [x, by - h * 0.74], [x + 12, by - 14], [x + 16, by]], '#ffc78a');
+    // pole and flag
+    line(ctx, x, by - h - 16, x, by - h + 4, '#6b4320', 3);
+    poly(ctx, [[x, by - h - 16], [x + 17, by - h - 11 + Math.sin(t * 3) * 2], [x, by - h - 6]], '#ffd21f');
+    if (sleepers > 0) drawZzz(ctx, x + 14, by - h * 0.72, t);
+    // campfire: a ring of stones, two logs, and flames once it gets dark
+    const fx = x + 84, fy = gy + 9;
+    for (let k = 0; k < 5; k++) ell(ctx, fx - 12 + k * 6, fy + (k % 2) * 2, 4, 3, k % 2 ? '#8a8a84' : '#a5a59c');
+    line(ctx, fx - 9, fy - 2, fx + 9, fy - 7, '#6b4320', 4); line(ctx, fx + 9, fy - 2, fx - 9, fy - 7, '#8a5a2b', 4);
+    if (night > 0.05) {
+      const f = 0.85 + 0.15 * Math.sin(t * 11);
+      ctx.globalAlpha = Math.min(1, night * 3);
+      poly(ctx, [[fx - 8, fy - 5], [fx - 3 + Math.sin(t * 9) * 2, fy - 26 * f], [fx + 1, fy - 13], [fx + 5 + Math.sin(t * 7) * 2, fy - 21 * f], [fx + 8, fy - 5]], '#ff8c1a');
+      poly(ctx, [[fx - 4, fy - 5], [fx + Math.sin(t * 13) * 1.5, fy - 15 * f], [fx + 4, fy - 5]], '#ffe066');
+      ctx.globalAlpha = 1;
+    }
+  }
+  // warm light painted after the night tint, so the camp glows in the dark
+  function drawCampGlow(ctx, t, night) {
+    if (night <= 0.05) return;
+    const gy = WORLD.GROUND_Y, fx = WORLD.TENT_X + 84, fy = gy - 4, r = 74 + Math.sin(t * 9) * 4;
+    const g = ctx.createRadialGradient(fx, fy, 0, fx, fy, r);
+    g.addColorStop(0, `rgba(255,190,90,${0.5 * night})`); g.addColorStop(1, 'rgba(255,190,90,0)');
+    ctx.fillStyle = g; ctx.fillRect(fx - r, fy - r, r * 2, r * 2);
+    const f = 0.85 + 0.15 * Math.sin(t * 11), y0 = gy + 9;
+    poly(ctx, [[fx - 4, y0 - 5], [fx + Math.sin(t * 13) * 1.5, y0 - 15 * f], [fx + 4, y0 - 5]], '#ffe066');
+  }
+  // little thought bubble with an emoji, shown over people and animals while they play
+  function drawBubble(ctx, emoji, x, y, t) {
+    const b = Math.sin(t * 5) * 1.5;
+    ctx.globalAlpha = 0.95; circ(ctx, x, y + b, 12, '#fff'); poly(ctx, [[x - 4, y + b + 10], [x + 4, y + b + 10], [x, y + b + 17]], '#fff'); ctx.globalAlpha = 1;
+    ctx.font = '14px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#222'; ctx.fillText(emoji, x, y + b + 1);
+  }
+  // --- beaver things: sticks on the ground and the dam ---
   function drawStick(ctx, x, y, r, t) {
     ctx.save(); ctx.translate(x, y); ctx.rotate(r);
     rrect(ctx, -11, -3, 22, 6, 3, '#8a5a2b'); rrect(ctx, -9, -2, 18, 2, 1, '#a9743d'); line(ctx, 4, -3, 9, -8, '#8a5a2b', 2.5);
@@ -263,8 +312,8 @@ const Draw = (() => {
   }
   // round "plant here" button under an empty spot; hot = a seed is picked so it bounces
   function drawPlantButton(ctx, x, y, t, hot) {
-    const by = y + 36 - (hot ? Math.abs(Math.sin(t * 5)) * 4 : 0), r = 12;
-    ctx.globalAlpha = 0.35; ell(ctx, x, y + 38, r + 2, 4, '#000'); ctx.globalAlpha = 1;
+    const by = y + 44 - (hot ? Math.abs(Math.sin(t * 5)) * 4 : 0), r = 12;
+    ctx.globalAlpha = 0.35; ell(ctx, x, y + 46, r + 2, 4, '#000'); ctx.globalAlpha = 1;
     circ(ctx, x, by, r, hot ? '#ffd21f' : '#ffffff');
     ctx.strokeStyle = hot ? '#b8860b' : '#2e8b3a'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, by, r, 0, TAU); ctx.stroke();
     line(ctx, x - 6, by, x + 6, by, '#2e8b3a', 3.5); line(ctx, x, by - 6, x, by + 6, '#2e8b3a', 3.5);
@@ -331,6 +380,7 @@ const Draw = (() => {
 
   // --- plants ---
   // level (1-3) makes an upgraded plant bigger.
+  const UI_DY = 38; // stars and grow bar sit this far under a land plant, in front of everyone's feet
   function levelScale(level) { return 1 + RULES.upgrade.sizePerLevel * ((level || 1) - 1); }
   function plantMetrics(def, progress, level) {
     const pr = Math.min(1, progress);
@@ -524,8 +574,8 @@ const Draw = (() => {
     }
     ctx.restore();
     // level stars under every sprouted plant: gold = current level, faint = levels still to earn
-    if (!plant.pending && pr < 1) drawGrowBar(ctx, x, baseY + (water ? 10 : 14), pr, t);
-    else if (!plant.pending) drawLevelStars(ctx, x, baseY + (water ? 10 : 14), plant.level || 1, t);
+    if (!plant.pending && pr < 1) drawGrowBar(ctx, x, baseY + (water ? 10 : UI_DY), pr, t);
+    else if (!plant.pending) drawLevelStars(ctx, x, baseY + (water ? 10 : UI_DY), plant.level || 1, t);
     return m;
   }
 
@@ -716,7 +766,11 @@ const Draw = (() => {
     rrect(ctx, -14 - sw, -16, 10, 16, 3, c1); rrect(ctx, 2 + sw, -16, 10, 16, 3, c1);
     ell(ctx, 28, -40, 16, 14, c1);
     ell(ctx, 22, -42, 10, 13, shade(c1, -20)); ell(ctx, 22, -42, 7, 10, c2);
-    ctx.strokeStyle = c1; ctx.lineWidth = 7; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(40, -36); ctx.quadraticCurveTo(50, -20, 44 + sw * 0.5, -6); ctx.stroke();
+    ctx.strokeStyle = c1; ctx.lineWidth = 7; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(40, -36);
+    if (o.pose === 'drink') ctx.quadraticCurveTo(60, -24, 58, 4 + Math.sin(o.t * 6) * 1.5);       // trunk down in the water
+    else if (o.pose === 'spray') ctx.quadraticCurveTo(64, -40, 52 + Math.sin(o.t * 10), -66);     // trunk up, spraying
+    else ctx.quadraticCurveTo(50, -20, 44 + sw * 0.5, -6);
+    ctx.stroke();
     line(ctx, 38, -32, 46, -28, '#fff', 3);
     eye(ctx, 34, -43, 2.5, o.closed);
     return { hx: 30, hy: -42, hr: 14 };
@@ -934,5 +988,5 @@ const Draw = (() => {
     ctx.fillStyle = '#fff'; ctx.fillText(text, x, y);
   }
 
-  return { setView, ell, circ, rect, rrect, line, poly, eye, smile, shade, lerpColor, seeded, nightFactor, drawSky, drawStars, drawSunMoon, drawClouds, drawFarJungle, drawGround, drawBush, drawMound, drawCave, drawCliff, drawFalls, drawStick, drawDam, drawLilyPad, drawPlantButton, sunMoonPos, drawSunMoonAt, waterY, drawLakeBasin, drawSeaweed, drawWater, drawWaterFront, plantMetrics, drawPlant, drawWaterSpot, levelScale, star, drawLevelStars, drawAccessory, drawPerson, drawCritter, drawFireflies, drawZzz, drawLabel };
+  return { setView, ell, circ, rect, rrect, line, poly, eye, smile, shade, lerpColor, seeded, nightFactor, drawSky, drawStars, drawSunMoon, drawClouds, drawFarJungle, drawGround, drawBush, drawMound, drawCave, drawCliff, drawFalls, drawStick, drawDam, drawLilyPad, drawPlantButton, sunMoonPos, drawSunMoonAt, waterY, drawLakeBasin, drawSeaweed, drawWater, drawWaterFront, plantMetrics, drawPlant, drawWaterSpot, levelScale, star, drawLevelStars, drawAccessory, drawPerson, drawCritter, drawFireflies, drawZzz, drawLabel, drawTent, drawCampGlow, drawBubble };
 })();

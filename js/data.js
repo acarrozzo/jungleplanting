@@ -2,15 +2,18 @@
 // Everything about plants, animals, colors and accessories lives here so it's easy to tweak.
 
 const WORLD = {
-  W: 1900, H: 560, GROUND_Y: 430,
+  W: 1700, H: 560, GROUND_Y: 430,
   LAKE_FLOOR: 115,        // how far below the ground the lake bottom is
   CAVE_X: 85,             // the cave on the left; bats sleep in it by day, the bear at night
-  LAKE_X: 1450,           // where the lake basin starts
-  SLOT_X0: 200, SLOT_DX: 80, MAX_SLOTS: 16, // 16 spots, 80 apart so neighbouring trees overlap less
-  LAKE_SLOTS: [1540, 1615, 1690], // x positions of the floating water-plant spots
-  LILY_PADS: [1500, 1578, 1652],  // decorative pads frogs hop onto
-  DAM_X: 1810,            // where the beaver builds the dam
-  FALLS_X: 1858,          // the waterfall cliff starts here
+  TENT_X: 290,            // the camp: people sleep in the tent at night, a campfire burns beside it
+  LAKE_X: 1270,           // where the lake basin starts
+  SLOT_X0: 440, SLOT_DX: 84, MAX_SLOTS: 10, // 10 land spots, 84 apart so neighbouring trees overlap less
+  LAKE_SLOTS: [1385, 1500],       // x positions of the 2 floating water-plant spots (12 plots in all)
+  LILY_PADS: [1335, 1442, 1558],  // decorative pads frogs hop onto
+  DAM_X: 1610,            // where the beaver builds the dam
+  FALLS_X: 1658,          // the waterfall cliff starts here
+  // depth lanes: how far below the ground line feet stand. Plants sit on the line, animals a bit in front, people in front of them.
+  LANES: { animal: [5, 13], person: [16, 24] },
   DAY: 180, NIGHT: 90,    // seconds (3 minute day, 1.5 minute night)
 };
 WORLD.CYCLE = WORLD.DAY + WORLD.NIGHT;
@@ -20,13 +23,17 @@ WORLD.CYCLE = WORLD.DAY + WORLD.NIGHT;
 const RULES = {
   growth:  { nightRate: 0.5, rainRate: 1.5, fruitRainRate: 1.3, sproutAt: 0.12 },
   rain:    { firstGap: [60, 120], gap: [90, 200], length: [30, 60], lakeFill: 0.009, lakeDrain: 0.002, lakeFloor: 0.2 },
-  slots:   { start: 6, perNewcomer: 2, clearCost: 3 },
+  slots:   { start: 4, perNewcomer: 2, clearCost: 3 },
   people:  { max: 5, walkSpeed: 75, plantTime: 0.9, clearTime: 1.4 },
   animals: { spawnEvery: 15, spawnChance: 0.45, maxPerCheck: 2, giftChance: 0.4, welcomeDelay: [15, 30], noFoodGiftChance: 0.5, newSeedBias: 0.75, eatTime: 2.5 },
   upgrade: { maxLevel: 3, sizePerLevel: 0.15, fruitMaxPerLevel: 1, fruitSpeedPerLevel: 0.2, giftBonusPerLevel: 0.15 },
   seeds:   { fallbackAfter: 75 },
   save:    { every: 5 },
-  beaver:  { stickEvery: 40, maxSticks: 4, sticksPerStage: 4, maxStage: 3, floorByStage: [0.2, 0.3, 0.4, 0.5], spillAt: 0.97, buildTime: 3 },
+  beaver:  { stickEvery: 40, maxSticks: 4, sticksPerStage: 4, maxStage: 3, floorByStage: [0.2, 0.3, 0.4, 0.5], spillAt: 0.97, buildTime: 3, chopTime: 4, woodPerTree: 4 },
+  // the elephant drinks at the lake, then sprays a plant and its neighbours (within reach); wet plants grow and fruit faster
+  elephant: { drinkTime: 2.5, sprayTime: 3.5, wetTime: 40, growBoost: 2, fruitBoost: 1.5, cooldown: 45, lakeCost: 0.03, reach: 90 },
+  // friendly play: every gap seconds of daytime one free person visits a friend or a ground animal
+  play:    { gap: [25, 60], time: 3.2, chase: 14 },
 };
 
 // Plants. grow = seconds from seed to fully grown (daytime, no rain).
@@ -58,22 +65,22 @@ const ANIMALS = {
   toucan:      { name: 'Toucan',      kind: 'bird',    active: 'day',   max: 1, speed: 130, hint: 'Looks for a banana tree',                  req: s => s.grown('banana') >= 1, eats: ['banana', 'papaya'], brings: ['papaya', 'banana'], gift: 64, sound: 'chirp', c1: '#222222', c2: '#ff8c1a' },
   hummingbird: { name: 'Hummingbird', kind: 'bug',     active: 'day',   max: 1, speed: 220, hint: 'Sips from big flowers',                    req: s => s.flowers >= 1, eats: ['flower', 'rainbow', 'orchid'], brings: ['rainbow', 'flower'], gift: 56, sound: 'chirp', c1: '#2fd27a', c2: '#ff4fa0' },
   monkey:      { name: 'Monkey',      kind: 'climber', active: 'day',   max: 1, speed: 120, hint: 'Needs 2 grown trees and a banana tree',    req: s => s.trees >= 2 && s.grown('banana') >= 1, eats: ['banana', 'mango', 'berry'], brings: ['berry', 'banana'], gift: 56, sound: 'ooh', c1: '#8b5a2b', c2: '#e8c39e' },
-  sloth:       { name: 'Sloth',       kind: 'climber', active: 'day',   max: 1, speed: 14,  hint: 'Comes when 6 trees are grown',             req: s => s.trees >= 6, eats: [], brings: ['kapok'], gift: 112, c1: '#9c8b74', c2: '#d9cbb3' },
+  sloth:       { name: 'Sloth',       kind: 'climber', active: 'day',   max: 1, speed: 14,  hint: 'Comes when 5 trees are grown',             req: s => s.trees >= 5, eats: [], brings: ['kapok'], gift: 112, c1: '#9c8b74', c2: '#d9cbb3' },
   butterfly:   { name: 'Butterfly',   kind: 'bug',     active: 'day',   max: 2, speed: 60,  hint: 'Flutters to flowers',                      req: s => s.flowers >= 1, eats: ['flower', 'rainbow', 'orchid', 'lily'], brings: ['flower'], gift: 96, giftChance: 0.3, c1: '#ff9f1a', c2: '#5a2a8a' },
   bee:         { name: 'Bee',         kind: 'bug',     active: 'day',   max: 2, speed: 90,  hint: 'Needs 2 flowers',                          req: s => s.flowers >= 2, eats: ['flower', 'rainbow', 'orchid', 'lily'], brings: ['flower', 'rainbow'], gift: 72, giftChance: 0.3, sound: 'buzz', c1: '#ffd21f', c2: '#222222' },
   capybara:    { name: 'Capybara',    kind: 'ground',  active: 'day',   max: 1, speed: 40,  hint: 'Likes a half-full lake and a tree',        req: s => s.lake >= 0.5 && s.trees >= 1, eats: ['berry', 'bamboo'], brings: ['lily', 'berry'], gift: 96, nearLake: true, c1: '#a86f3a', c2: '#5a3a1a' },
-  tapir:       { name: 'Tapir',       kind: 'ground',  active: 'day',   max: 1, speed: 45,  hint: 'Comes when 5 trees are grown',             req: s => s.trees >= 5, eats: ['fig', 'mango', 'papaya'], brings: ['fig'], gift: 80, c1: '#3a3a3a', c2: '#e8e8e8' },
-  elephant:    { name: 'Elephant',    kind: 'ground',  active: 'day',   max: 1, speed: 35,  hint: 'Very rare! Needs 11 grown trees',          req: s => s.trees >= 11, eats: ['banana', 'mango', 'fig', 'papaya', 'nut'], brings: ['golden'], gift: 96, chance: 0.07, sound: 'trumpet', c1: '#8d8d9a', c2: '#c9b3c9' },
-  gorilla:     { name: 'Gorilla',     kind: 'ground',  active: 'day',   max: 1, speed: 50,  hint: 'Needs 7 grown trees and bananas',          req: s => s.trees >= 7 && s.grown('banana') >= 1, eats: ['banana', 'bamboo', 'berry'], brings: ['bamboo', 'banana'], gift: 72, sound: 'ooh', c1: '#2b2b2b', c2: '#6d6d6d' },
-  bear:        { name: 'Bear',        kind: 'ground',  active: 'day',   max: 1, speed: 45, hint: 'Lives in the cave. Comes when berries and 4 trees are grown', req: s => s.grown('berry') >= 1 && s.trees >= 4, eats: ['berry', 'fig', 'nut'], brings: ['berry', 'nut'], gift: 80, home: 'cave', sound: 'growl', c1: '#6b4a2b', c2: '#c9a27a' },
-  beaver:      { name: 'Beaver',      kind: 'ground',  active: 'both',  max: 1, speed: 55, hint: 'Comes when the lake is 70% full and 3 trees are grown. Builds a dam from sticks!', req: s => s.lake >= 0.7 && s.trees >= 3, eats: ['bamboo'], brings: ['bamboo', 'nut'], gift: 90, nearLake: true, swims: true, c1: '#7a4a2a', c2: '#3a2a1a' },
+  tapir:       { name: 'Tapir',       kind: 'ground',  active: 'day',   max: 1, speed: 45,  hint: 'Comes when 4 trees are grown',             req: s => s.trees >= 4, eats: ['fig', 'mango', 'papaya'], brings: ['fig'], gift: 80, c1: '#3a3a3a', c2: '#e8e8e8' },
+  elephant:    { name: 'Elephant',    kind: 'ground',  active: 'day',   max: 1, speed: 35,  hint: 'Rare! Needs 7 grown trees. Drinks at the lake and sprays the plants', req: s => s.trees >= 7, eats: ['banana', 'mango', 'fig', 'papaya', 'nut'], brings: ['golden'], gift: 96, chance: 0.1, sound: 'trumpet', c1: '#8d8d9a', c2: '#c9b3c9' },
+  gorilla:     { name: 'Gorilla',     kind: 'ground',  active: 'day',   max: 1, speed: 50,  hint: 'Needs 5 grown trees and bananas',          req: s => s.trees >= 5 && s.grown('banana') >= 1, eats: ['banana', 'bamboo', 'berry'], brings: ['bamboo', 'banana'], gift: 72, sound: 'ooh', c1: '#2b2b2b', c2: '#6d6d6d' },
+  bear:        { name: 'Bear',        kind: 'ground',  active: 'day',   max: 1, speed: 45, hint: 'Lives in the cave. Comes when berries and 3 trees are grown', req: s => s.grown('berry') >= 1 && s.trees >= 3, eats: ['berry', 'fig', 'nut'], brings: ['berry', 'nut'], gift: 80, home: 'cave', sound: 'growl', c1: '#6b4a2b', c2: '#c9a27a' },
+  beaver:      { name: 'Beaver',      kind: 'ground',  active: 'both',  max: 1, speed: 55, hint: 'Comes when the lake is 70% full and 3 trees are grown. Builds a dam from sticks, and can chop a tree for wood!', req: s => s.lake >= 0.7 && s.trees >= 3, eats: ['bamboo'], brings: ['bamboo', 'nut'], gift: 90, nearLake: true, swims: true, c1: '#7a4a2a', c2: '#3a2a1a' },
   panda:       { name: 'Panda',       kind: 'ground',  active: 'day',   max: 1, speed: 40, hint: 'Comes when 2 bamboo are grown',               req: s => s.grown('bamboo') >= 2, eats: ['bamboo'], brings: ['bamboo', 'berry'], gift: 80, sound: 'ooh', c1: '#f4f4f4', c2: '#222222' },
-  owl:         { name: 'Owl',         kind: 'bird',    active: 'night', max: 1, speed: 110, hint: 'Hoots at night once 5 trees are grown',    req: s => s.trees >= 5, eats: [], brings: ['moonflower'], gift: 96, sound: 'hoot', c1: '#a0714f', c2: '#e9d8b8' },
-  bat:         { name: 'Bat',         kind: 'bird',    active: 'night', max: 1, speed: 170, hint: 'Flies at night once 5 fruit trees are grown; sleeps in the cave', req: s => s.fruitTrees >= 5, eats: ['fig', 'mango', 'papaya', 'banana'], brings: ['fig'], gift: 72, home: 'cave', c1: '#3b2d4a', c2: '#8a6aa8' },
+  owl:         { name: 'Owl',         kind: 'bird',    active: 'night', max: 1, speed: 110, hint: 'Hoots at night once 4 trees are grown',    req: s => s.trees >= 4, eats: [], brings: ['moonflower'], gift: 96, sound: 'hoot', c1: '#a0714f', c2: '#e9d8b8' },
+  bat:         { name: 'Bat',         kind: 'bird',    active: 'night', max: 1, speed: 170, hint: 'Flies at night once 4 fruit trees are grown; sleeps in the cave', req: s => s.fruitTrees >= 4, eats: ['fig', 'mango', 'papaya', 'banana'], brings: ['fig'], gift: 72, home: 'cave', c1: '#3b2d4a', c2: '#8a6aa8' },
   fireflies:   { name: 'Fireflies',   kind: 'glow',    active: 'night', max: 1, speed: 30,  hint: 'Glow at night near flowers',               req: s => s.flowers >= 1, eats: [], brings: [], gift: 0, c1: '#d8ff5a', c2: '#ffffff' },
-  jaguar:      { name: 'Jaguar',      kind: 'ground',  active: 'night', max: 1, speed: 70,  hint: 'Rare! Prowls at night with 9 trees grown', req: s => s.trees >= 9, eats: [], brings: ['orchid'], gift: 112, chance: 0.1, c1: '#e0a53a', c2: '#2a2a2a' },
-  treefrog:    { name: 'Tree Frog',   kind: 'climber', active: 'night', max: 1, speed: 60,  hint: 'Sits in trees at night once 4 trees are grown', req: s => s.trees >= 4, eats: [], brings: [], gift: 0, sound: 'croak', c1: '#4fd14a', c2: '#ff5a3a' },
-  armadillo:   { name: 'Armadillo',   kind: 'ground',  active: 'night', max: 1, speed: 40,  hint: 'Digs at night once 6 trees are grown',     req: s => s.trees >= 6, eats: ['nut', 'berry'], brings: ['nut'], gift: 80, c1: '#9a9a8a', c2: '#5e5e50' },
+  jaguar:      { name: 'Jaguar',      kind: 'ground',  active: 'night', max: 1, speed: 70,  hint: 'Rare! Prowls at night with 6 trees grown', req: s => s.trees >= 6, eats: [], brings: ['orchid'], gift: 112, chance: 0.1, c1: '#e0a53a', c2: '#2a2a2a' },
+  treefrog:    { name: 'Tree Frog',   kind: 'climber', active: 'night', max: 1, speed: 60,  hint: 'Sits in trees at night once 3 trees are grown', req: s => s.trees >= 3, eats: [], brings: [], gift: 0, sound: 'croak', c1: '#4fd14a', c2: '#ff5a3a' },
+  armadillo:   { name: 'Armadillo',   kind: 'ground',  active: 'night', max: 1, speed: 40,  hint: 'Digs at night once 4 trees are grown',     req: s => s.trees >= 4, eats: ['nut', 'berry'], brings: ['nut'], gift: 80, c1: '#9a9a8a', c2: '#5e5e50' },
   moth:        { name: 'Moth',        kind: 'bug',     active: 'night', max: 1, speed: 70,  hint: 'Loves moonflowers',                        req: s => s.grown('moonflower') >= 1, eats: ['moonflower'], brings: ['moonflower'], gift: 80, c1: '#e8e0c8', c2: '#8a7f66' },
   fish:        { name: 'Fish',        kind: 'lake',    active: 'both',  max: 3, speed: 60,  hint: 'Swims when the lake is half full',         req: s => s.lake >= 0.5, eats: [], brings: [], gift: 0, zone: [0.05, 0.95], c1: '#ff7f2a', c2: '#ffd27f' },
   turtle:      { name: 'Turtle',      kind: 'lake',    active: 'both',  max: 1, speed: 20,  hint: 'Needs a half-full lake and a tree',        req: s => s.lake >= 0.5 && s.trees >= 1, eats: [], brings: ['lily'], gift: 144, zone: [0, 0.3], c1: '#3f8f3a', c2: '#8fd36a' },
@@ -104,3 +111,23 @@ const SKIN_COLORS = ['#ffe0bd', '#f1c27d', '#e0ac69', '#c68642', '#8d5524', '#5a
 const HAIR_COLORS = ['#222222', '#5a3a1a', '#8b5a2b', '#d9a066', '#ff3b3b', '#2f6bff', '#8a4fff', '#ff4fa0'];
 
 const PERSON_NAMES = ['Maya', 'Leo', 'Zuri', 'Kai', 'Nova', 'Milo', 'Aria', 'Finn', 'Luna', 'Theo', 'Ivy', 'Remy'];
+
+// Friendly play. a = bubble over the person who starts it, b = bubble over the friend or animal, text floats above them.
+const PLAYS = {
+  person: [
+    { act: 'highfive', text: '🙌 High five!',        a: '🙌', b: '🙌' },
+    { act: 'dance',    text: '🎵 Dance party!',      a: '🎵', b: '🎶' },
+    { act: 'joke',     text: '😂 Silly joke!',       a: '🤪', b: '😂' },
+    { act: 'hug',      text: '🤗 Big hug!',          a: '🤗', b: '💛' },
+    { act: 'wave',     text: '👋 Hello, friend!',    a: '👋', b: '👋' },
+    { act: 'spin',     text: '🌀 Spin, spin, spin!', a: '🌀', b: '😆' },
+  ],
+  animal: [
+    { act: 'pet',      text: '💛 Gentle pats!',      a: '🤚', b: '💛' },
+    { act: 'treat',    text: '🍌 Snack time!',       a: '🍌', b: '😋' },
+    { act: 'dance',    text: '🎶 Dance with me!',    a: '🎵', b: '🎶' },
+    { act: 'peekaboo', text: '🙈 Peekaboo!',         a: '🙈', b: '😄' },
+    { act: 'tickle',   text: '🤭 Tickle, tickle!',   a: '🤭', b: '😆' },
+    { act: 'boop',     text: '👃 Nose boop!',        a: '👉', b: '💫' },
+  ],
+};

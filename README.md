@@ -26,7 +26,13 @@ It is a static site, so any static host works. For Vercel: import the GitHub rep
 - A cave on the left: bats sleep in it by day and a bear sleeps in it at night.
 - A beaver comes when the lake is full and trees are grown. Trees drop sticks; tap them (or let the beaver fetch them) and it builds a dam in three stages that keeps the lake from draining. A full lake spills over the dam, and the otter slides down the waterfall.
 - ⏸️ pauses the game. It also pauses on its own when you switch apps.
-- 💡 says what to do next and takes you there. 👀 on any name card zooms in and follows that animal or person. The camera also glides to new arrivals unless you are busy (toggle in the menu).
+- 👀 on any name card zooms in and follows that animal or person. The camera also glides to new arrivals unless you are busy (toggle in the menu).
+- 12 plots: 10 on land and 2 floating in the lake. On a 1024px screen or wider, zooming all the way out shows the whole jungle.
+- ⛺ People sleep in the tent at night, next to a campfire. They still get up to plant if you ask.
+- 🐘 The elephant drinks at the lake and sprays the plants, which makes them grow faster for a while.
+- 🪓 Tap a grown tree to let the beaver chop it down. The wood goes into the dam and the spot is free again.
+- 💛 Now and then people play with each other and the animals: high fives, dances, tickles, nose boops.
+- People stand a little in front of animals, and animals a little in front of plants, so overlapping things are easier to see and tap.
 - 📸 in the menu saves a picture of your jungle.
 - Days are 3 minutes, nights 1.5 minutes. Plants grow slower at night and faster in the rain. Rain also fills the lake.
 - Grown trees make fruit. Animals come to eat it and bring you seeds, including new kinds. Every new animal brings a welcome seed soon after it arrives.
