@@ -39,6 +39,9 @@
   const FY = GY + WORLD.FLOWER_DY;      // the flower patches: in front of the animals
   const STICK_Y = PY + 8, TENT_Y = GY + WORLD.TENT_DY;
   const slotY = i => isWaterSlot(i) ? Draw.waterY(S.lake) : isFlowerSlot(i) ? FY : PY;
+  const PATCH_K = 0.6;                  // plants on the flower patches are drawn this much smaller, so they never hide a tree base
+  const slotK = i => isFlowerSlot(i) ? PATCH_K : 1;
+  const slotMetrics = (i, p) => { const m = Draw.plantMetrics(PLANTS[p.id], p.progress, p.level), k = slotK(i); return k === 1 ? m : { ...m, H: m.H * k, topY: m.topY * k, canopyY: m.canopyY * k, R: m.R * k }; };
   const slotOpen = i => isWaterSlot(i) || isFlowerSlot(i) || i < S.slotsOpen;
   const seedFits = (id, i) => seedClass(id) === slotClass(i);
   const landY = e => GY + (e.lane || 0); // feet of a person or ground animal in its depth lane
@@ -393,7 +396,7 @@
     if (sp.kind === 'glow') { a.x = a.tx; a.y = a.ty; }
     S.animals.push(a);
     Sound.play('chime'); if (sp.sound) setTimeout(() => Sound.play(sp.sound), 450);
-    toast(`${sp.name === 'Fireflies' ? '✨ Fireflies have' : 'A ' + sp.name + ' has'} arrived!`, 8000, { big: true, action: { label: 'Name it! ✏️', fn: () => showAnimalSheet(a) } });
+    toast(`${sp.name === 'Fireflies' ? '✨ Fireflies have' : (/^[aeiou]/i.test(sp.name) ? 'An ' : 'A ') + sp.name + ' has'} arrived!`, 8000, { big: true, action: { label: 'Name it! ✏️', fn: () => showAnimalSheet(a) } });
     followEvent(a.tx || a.x);
     return a;
   }
@@ -438,7 +441,7 @@
     }
     if (!choice) { a.slot = -1; a.tx = rand(60, WORLD.LAKE_X - 60); a.ty = GY - rand(160, 340); return; }
     a.slot = choice.i;
-    const m = Draw.plantMetrics(choice.d, choice.p.progress, choice.p.level), bx = slotX(choice.i), by = slotY(choice.i);
+    const m = slotMetrics(choice.i, choice.p), bx = slotX(choice.i), by = slotY(choice.i);
     switch (sp.kind) {
       case 'bird': a.tx = bx + rand(-8, 8); a.ty = by + m.topY + 6; break;
       case 'climber': a.tx = bx + rand(-10, 10); a.ty = a.sp === 'treefrog' ? by - m.H * 0.4 : by + m.canopyY + m.R * 0.5; break;
@@ -647,7 +650,7 @@
     if (a.state === 'toSpray') { if (moveToward(a, dt, sp.speed * 1.5)) { a.state = 'spray'; a.timer = E.sprayTime; a.face = -1; Sound.play('trumpet'); setTimeout(() => Sound.play('splash'), 300); } return true; }
     // spraying: a fountain from the trunk tip that rains down over the plant
     a.timer -= dt; a.face = -1;
-    for (let k = 0; k < 3; k++) if (Math.random() < dt * 25) particles.push({ x: a.x - 52 * depthScale(a.y), y: a.y - 68 * depthScale(a.y), vx: -rand(5, 75), vy: rand(-250, -170), life: rand(1.6, 2.5), color: k ? '#9fd8f5' : '#dff4ff', r: rand(1.5, 3) });
+    for (let k = 0; k < 3; k++) if (Math.random() < dt * 25) particles.push({ x: a.x - 52 * (sp.size || 1) * depthScale(a.y), y: a.y - 68 * (sp.size || 1) * depthScale(a.y), vx: -rand(5, 75), vy: rand(-250, -170), life: rand(1.6, 2.5), color: k ? '#9fd8f5' : '#dff4ff', r: rand(1.5, 3) });
     if (a.timer <= 0) {
       const cx = slotX(a.waterSlot);
       S.plants.forEach((q, i) => { if (q && !q.pending && !isWaterSlot(i) && Math.abs(slotX(i) - cx) <= E.reach) q.wet = E.wetTime; });
@@ -863,10 +866,10 @@
       if (!slotOpen(i)) { if (isHover('bush', i)) drawGlow(hoverBox(hover), c => row(c, () => Draw.drawBush(c, slotX(i), t)), t); row(ctx, () => Draw.drawBush(ctx, slotX(i), t)); return; }
       const p = S.plants[i], x = slotX(i) + (i === chopI ? Math.sin(t * 42) * 1.6 : 0), y = slotY(i);
       const spot = c => { if (water) Draw.drawWaterSpot(c, x, y, t, 0); else if (flower) row(c, () => Draw.drawPatch(c, x)); else row(c, () => Draw.drawMound(c, x, 0)); };
-      if (isHover(p ? 'plant' : 'empty', i)) drawGlow(hoverBox(hover), c => { if (!p || p.pending) { spot(c); if (!p) Draw.drawPlantButton(c, x, y, t, false); } else Draw.drawPlant(c, x, y, PLANTS[p.id], p, t, night); }, t);
+      if (isHover(p ? 'plant' : 'empty', i)) drawGlow(hoverBox(hover), c => { if (!p || p.pending) { spot(c); if (!p) Draw.drawPlantButton(c, x, y, t, false); } else Draw.drawPlant(c, x, y, PLANTS[p.id], p, t, night, slotK(i)); }, t);
       if (!p) { spot(ctx); Draw.drawPlantButton(ctx, x, y, t, hl === slotClass(i)); }
       else if (p.pending) { spot(ctx); ctx.globalAlpha = 0.6 + 0.4 * Math.sin(t * 4); ctx.font = '18px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(PLANTS[p.id].emoji, x, y - 18); ctx.globalAlpha = 1; }
-      else Draw.drawPlant(ctx, x, y, PLANTS[p.id], p, t, night);
+      else Draw.drawPlant(ctx, x, y, PLANTS[p.id], p, t, night, slotK(i));
     };
     for (let i = WATER0; i < FLOWER0; i++) drawSlot(i);
 
@@ -931,7 +934,7 @@
     const ball = a.sp === 'armadillo' && ((moving && a.rolling) || (!moving && a.curled && a.state !== 'eating'));
     const hang = a.sp === 'bat' && a.state === 'sleep';
     if (hang) { c.save(); c.translate(0, 2 * (y - 40)); c.scale(1, -1); }
-    const head = Draw.drawCritter(c, { x: a.x, y, sp: ball ? 'armadilloBall' : a.sp, acc: a.acc }, { c1: a.c1, c2: a.c2, t: a.anim, moving, closed: a.state === 'sleep', face: a.face, size: sp.kind === 'ground' || dry ? depthScale(depthY(a)) : 1, rot: a.x * 0.09, peek: !moving, land: dry, pose: a.state === 'drink' || a.state === 'spray' ? a.state : air ? (a.state === 'hang' ? 'hang' : 'jump') : null });
+    const head = Draw.drawCritter(c, { x: a.x, y, sp: ball ? 'armadilloBall' : a.sp, acc: a.acc }, { c1: a.c1, c2: a.c2, t: a.anim, moving, closed: a.state === 'sleep', face: a.face, size: (sp.size || 1) * (sp.kind === 'ground' || dry ? depthScale(depthY(a)) : 1), rot: a.x * 0.09, peek: !moving, land: dry, pose: a.state === 'drink' || a.state === 'spray' ? a.state : air ? (a.state === 'hang' ? 'hang' : 'jump') : null });
     if (hang) c.restore();
     if (plain) return;
     if (head) {
@@ -939,7 +942,8 @@
       if (a.named) Draw.drawLabel(c, a.name, a.x, Math.min(head.hy - head.hr - 12, y - 46));
       if (a.state === 'play' && a.playEmoji) Draw.drawBubble(c, a.playEmoji, head.hx, Math.min(head.hy - head.hr - 12, y - 46) - (a.named ? 24 : 6), t);
     }
-    a.bb = air ? { x: a.x - 36, y: y - 96, w: 72, h: 100 } : { x: a.x - 36, y: y - 62, w: 72, h: 70 };
+    const bs = sp.size || 1;
+    a.bb = air ? { x: a.x - 36, y: y - 96, w: 72, h: 100 } : { x: a.x - 36 * bs, y: y - 62 * bs, w: 72 * bs, h: 70 * bs };
   }
   const isHover = (type, key) => !!hover && hover.type === type && (type === 'animal' ? hover.a === key : type === 'person' ? hover.pe === key : type === 'stick' ? hover.k === key : hover.i === key);
   // Soft glow that hugs the real shape: draw the thing onto an offscreen canvas, then paint only that image's blurred shadow underneath it.
@@ -1042,8 +1046,8 @@
       if (Math.abs(x - slotX(i)) > half(i)) continue;
       const p = S.plants[i];
       if (!p) { if (near(i, FY)) return { type: 'empty', i }; continue; }
-      const m = Draw.plantMetrics(PLANTS[p.id], p.progress, p.level);
-      if (y > FY + m.topY - 10 && y < FY + 36) return { type: 'plant', i, p, m };
+      const m = slotMetrics(i, p);
+      if (y > FY + m.topY - 10 && y < FY + 30) return { type: 'plant', i, p, m };
     }
     for (let i = 0; i < FLOWER0; i++) {
       if (Math.abs(x - slotX(i)) > half(i)) continue;
@@ -1051,7 +1055,7 @@
       if (!slotOpen(i)) return (y > PY - 60 && y < PY + 40) ? { type: 'bush', i } : null;
       const p = S.plants[i];
       if (!p) return near(i, by) ? { type: 'empty', i } : null;
-      const m = Draw.plantMetrics(PLANTS[p.id], p.progress, p.level);
+      const m = slotMetrics(i, p);
       return (y > by + m.topY - 16 && y < by + 36) ? { type: 'plant', i, p, m } : null;
     }
     if (x > WORLD.LAKE_X - 20 && y > GY - 20 && x < WORLD.FALLS_X) return { type: 'lake' };
@@ -1155,7 +1159,7 @@
       const chip = document.createElement('button');
       chip.className = 'chip' + (selectedSeed === k ? ' sel' : '') + (n ? '' : ' empty');
       const planted = S.plants.filter(p => p && p.id === k).length;
-      chip.innerHTML = `<span class="em">${d.emoji}</span><span class="n">${n}</span>${planted ? `<span class="pc" title="${planted} planted">${planted}</span>` : ''}`; chip.setAttribute('aria-label', `${d.name}: ${n} seeds, ${planted} planted`);
+      chip.innerHTML = `<span class="em">${d.emoji}</span><span class="col"><span class="n">${n}</span><span class="pl${planted ? '' : ' none'}">🌱${planted}</span></span>`; chip.setAttribute('aria-label', `${d.name}: ${n} seeds, ${planted} planted`);
       chip.addEventListener('mouseenter', () => showTip(chip, seedTip(k))); chip.addEventListener('mouseleave', hideTip); chip.addEventListener('focus', () => showTip(chip, seedTip(k))); chip.addEventListener('blur', hideTip);
       chip.onclick = () => {
         Sound.init(); Sound.resume(); Sound.play('click');
@@ -1202,49 +1206,76 @@
   function closeSheet() { $('sheet').classList.add('hidden'); sheetOpen = false; lastFrame = performance.now(); save(); }
   $('sheet').addEventListener('pointerdown', e => { if (e.target === $('sheet') && sheetDismissable) closeSheet(); });
 
+  // The dress-up card: a big live portrait and name on a tinted hero, facts about the animal, then colours and hats.
+  const KIND_WORDS = { bird: 'Flies and perches in the tree tops', climber: 'Climbs about in the trees', bug: 'Hovers at the flowers', ground: 'Walks the jungle floor', lake: 'Swims in the lake', glow: 'Glows in the dark' };
   function buildCustomizer(target, type, opts) {
-    const card = el('div', 'card compact');
-    card.appendChild(el('h2', null, opts.title));
-    if (opts.subtitle) card.appendChild(el('p', 'sub', opts.subtitle));
-    const body = el('div', 'custbody'), left = el('div', 'custleft'), right = el('div', 'custright');
-    const pv = el('canvas', 'preview'); pv.width = 320; pv.height = 260; left.appendChild(pv);
-    const inline = el('div', 'inline'); const inp = el('input'); inp.type = 'text'; inp.maxLength = 14; inp.value = target.name; inp.autocomplete = 'off'; inp.setAttribute('aria-label', 'Name');
+    const card = el('div', 'card cust');
+    const sp = type === 'animal' ? ANIMALS[target.sp] : null;
+    const tint = type === 'person' ? target.shirt : target.c1;
+    card.style.setProperty('--hc', Draw.lerpColor(tint, '#ffffff', 0.55));
+    const main = el('div', 'custmain'), hero = el('div', 'custhero'), side = el('div', 'custside');
+    hero.appendChild(el('h2', null, opts.title));
+    if (opts.subtitle) hero.appendChild(el('p', 'sub', opts.subtitle));
+    const pv = el('canvas', 'preview'); pv.width = 400; pv.height = 300; hero.appendChild(pv);
+    const nb = el('div', 'namebox');
+    const inp = el('input'); inp.type = 'text'; inp.maxLength = 14; inp.value = target.name; inp.autocomplete = 'off'; inp.setAttribute('aria-label', 'Name'); inp.placeholder = 'Name';
     inp.addEventListener('input', () => { if (inp.value.trim()) target.name = inp.value.trim(); });
     const shuffle = el('button', 'small', '🎲'); shuffle.title = 'Random name'; shuffle.onclick = () => { inp.value = pick(type === 'person' ? PERSON_NAMES : ANIMAL_NAMES); target.name = inp.value; Sound.play('click'); };
-    const reset = el('button', 'small', '↩️'); reset.title = 'Back to the original look'; reset.onclick = () => { resetLook(target, type); Sound.play('pop'); openSheet(buildCustomizer(target, type, opts), sheetDismissable); };
-    inline.append(inp, shuffle, reset); left.appendChild(inline);
+    nb.append(el('span', 'pen', '✏️'), inp, shuffle); hero.appendChild(nb);
+    // facts: what this friend does
+    const facts = el('div', 'facts');
+    const em = ids => ids.map(id => PLANTS[id] ? PLANTS[id].emoji : id).join(' ');
+    if (sp) {
+      facts.appendChild(el('span', 'pill', sp.active === 'night' ? '🌙 Out at night' : sp.active === 'both' ? '🌗 Day and night' : '☀️ Out by day'));
+      facts.appendChild(el('span', 'pill', KIND_WORDS[sp.kind] || ''));
+      if (sp.eats.length) facts.appendChild(el('span', 'pill', `Eats ${em(sp.eats)}`));
+      if (sp.brings.length) facts.appendChild(el('span', 'pill', `Brings ${em(sp.brings)} seeds`));
+      if (sp.home === 'cave') facts.appendChild(el('span', 'pill', '🕳️ Sleeps in the cave'));
+    } else if (type === 'person') {
+      const st = target.task && target.task.type === 'arrive' ? '🚶 On the way' : asleep(target) ? '💤 Asleep in the tent' : target.task && target.task.type === 'play' ? '💛 Playing' : target.task && ['plant', 'planting'].includes(target.task.type) ? '🌱 Planting' : '🧭 Exploring';
+      facts.append(el('span', 'pill', st), el('span', 'pill', `🌱 ${S.stats.planted} planted together`));
+    }
+    if (facts.children.length) side.appendChild(facts);
     if (type === 'person' && !target.def) target.def = { name: target.name, skin: target.skin, shirt: target.shirt, pants: target.pants, hair: target.hair, acc: target.acc || 'none' };
+    const opt = el('div', 'custopts');
     const fields = type === 'person' ? [['skin', 'Skin', SKIN_COLORS], ['hair', 'Hair', HAIR_COLORS], ['shirt', 'Shirt', PEOPLE_COLORS], ['pants', 'Pants', PEOPLE_COLORS]]
-      : type === 'sky' ? [['c1', 'Color', SKY_COLORS], ['c2', 'Glow', SKY_COLORS]]
-      : [['c1', 'Color', ANIMAL_COLORS], ['c2', 'Accent', ANIMAL_COLORS]];
+      : type === 'sky' ? [['c1', 'Colour', SKY_COLORS], ['c2', 'Glow', SKY_COLORS]]
+      : [['c1', 'Colour', ANIMAL_COLORS], ['c2', 'Accent', ANIMAL_COLORS]];
     for (const [key, label, cols] of fields) {
       const row = el('div', 'optrow'); row.appendChild(el('label', null, label));
       const sw = el('div', 'swatches');
-      for (const c of cols) { const b = el('button', 'sw'); b.style.background = c; b.title = label; if (target[key] === c) b.classList.add('sel'); b.onclick = () => { target[key] = c; sw.querySelectorAll('.sw').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); Sound.play('click'); redraw(); }; sw.appendChild(b); }
-      row.appendChild(sw); right.appendChild(row);
+      for (const c of cols) { const b = el('button', 'sw'); b.style.background = c; b.title = label; if (target[key] === c) b.classList.add('sel'); b.onclick = () => { target[key] = c; sw.querySelectorAll('.sw').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); if (key === (type === 'person' ? 'shirt' : 'c1')) card.style.setProperty('--hc', Draw.lerpColor(c, '#ffffff', 0.55)); Sound.play('click'); redraw(); }; sw.appendChild(b); }
+      row.appendChild(sw); opt.appendChild(row);
     }
     const arow = el('div', 'optrow'); arow.appendChild(el('label', null, 'Hat'));
     const accs = el('div', 'accs');
     for (const a of ACCESSORIES) { const b = el('button', 'acc', a.emoji); b.title = a.name; if ((target.acc || 'none') === a.id) b.classList.add('sel'); b.onclick = () => { target.acc = a.id; accs.querySelectorAll('.acc').forEach(x => x.classList.remove('sel')); b.classList.add('sel'); Sound.play('click'); redraw(); }; accs.appendChild(b); }
-    arow.appendChild(accs); right.appendChild(arow);
-    if (type !== 'sky') { const wb = el('button', 'big', '👀 Zoom in and watch'); wb.onclick = () => { closeSheet(); watchEntity(target, type === 'person'); }; right.appendChild(wb); }
-    if (opts.extra) right.appendChild(opts.extra);
-    body.append(left, right); card.appendChild(body);
-    const done = el('button', 'big primary', opts.doneLabel || 'Done ✅');
+    arow.appendChild(accs); opt.appendChild(arow);
+    side.appendChild(opt);
+    const acts = el('div', 'custacts');
+    if (type !== 'sky') { const wb = el('button', 'big', '👀 Watch'); wb.onclick = () => { closeSheet(); watchEntity(target, type === 'person'); }; acts.appendChild(wb); }
+    const reset = el('button', 'big', '↩️ Reset look'); reset.onclick = () => { resetLook(target, type); Sound.play('pop'); openSheet(buildCustomizer(target, type, opts), sheetDismissable); };
+    acts.appendChild(reset);
+    if (opts.extra) acts.appendChild(opts.extra);
+    side.appendChild(acts);
+    main.append(hero, side); card.appendChild(main);
+    const done = el('button', 'big primary done', opts.doneLabel || 'Done ✅');
     done.onclick = () => { if (inp.value.trim()) target.name = inp.value.trim(); Sound.play('chime'); if (opts.onDone) opts.onDone(); closeSheet(); };
     card.appendChild(done);
     function redraw() {
-      const c = pv.getContext('2d'); c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, 320, 260);
+      const c = pv.getContext('2d'); c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, 400, 300);
       const now = performance.now() / 1000;
       if (type === 'sky') {
-        c.fillStyle = opts.sun ? '#8fd0ff' : '#1a2550'; c.fillRect(0, 0, 320, 260);
-        c.save(); c.translate(160, 140); c.scale(2.2, 2.2); Draw.drawSunMoonAt(c, 0, 0, target, opts.sun, now); c.restore();
+        c.fillStyle = opts.sun ? '#8fd0ff' : '#1a2550'; c.fillRect(0, 0, 400, 300);
+        c.save(); c.translate(200, 160); c.scale(2.6, 2.6); Draw.drawSunMoonAt(c, 0, 0, target, opts.sun, now); c.restore();
         return;
       }
-      c.fillStyle = '#dff3d8'; c.fillRect(0, 0, 320, 260); c.fillStyle = '#2f7a34'; c.fillRect(0, 215, 320, 45); c.fillStyle = '#56b04a'; c.fillRect(0, 215, 320, 5);
-      c.save(); c.translate(160, 215); c.scale(2.6, 2.6);
-      if (type === 'person') Draw.drawPerson(c, 0, 0, target, { t: 0, face: 1 });
-      else { const sp = ANIMALS[target.sp]; if (sp.kind === 'lake') { c.fillStyle = '#3aa0e0'; c.fillRect(-60, 0, 120, 20); } if (sp.kind === 'glow') Draw.drawFireflies(c, { x: 0, y: 10 }, now); else Draw.drawCritter(c, { x: 0, y: 0, sp: target.sp, acc: target.acc }, { c1: target.c1, c2: target.c2, t: now, face: 1, size: 1 }); }
+      const g = c.createLinearGradient(0, 0, 0, 300); g.addColorStop(0, '#bfe6ff'); g.addColorStop(1, '#dff3d8'); c.fillStyle = g; c.fillRect(0, 0, 400, 300);
+      c.fillStyle = '#2f7a34'; c.fillRect(0, 250, 400, 50); c.fillStyle = '#56b04a'; c.fillRect(0, 250, 400, 6);
+      const k = sp && sp.size ? 2.6 : 3.2;
+      c.save(); c.translate(200, 250); c.scale(k, k);
+      if (type === 'person') Draw.drawPerson(c, 0, 0, target, { t: now, face: 1 });
+      else { if (sp.kind === 'lake') { c.fillStyle = '#3aa0e0'; c.fillRect(-70, 0, 140, 20); } if (sp.kind === 'glow') Draw.drawFireflies(c, { x: 0, y: 10 }, now); else Draw.drawCritter(c, { x: 0, y: 0, sp: target.sp, acc: target.acc }, { c1: target.c1, c2: target.c2, t: now, face: 1, size: 1 }); }
       c.restore();
     }
     redraw();
@@ -1265,7 +1296,7 @@
   }
   function showAnimalSheet(a) {
     const sp = ANIMALS[a.sp];
-    openSheet(buildCustomizer(a, 'animal', { title: a.named ? `✏️ ${a.name}` : `🎉 A ${sp.name} is here! Name it!`, subtitle: sp.hint, onDone: () => { a.named = !isDefaultLook(a); } }), true);
+    openSheet(buildCustomizer(a, 'animal', { title: a.named ? `✏️ ${a.name}` : `🎉 ${/^[aeiou]/i.test(sp.name) ? 'An' : 'A'} ${sp.name} is here! Name it!`, subtitle: sp.hint, onDone: () => { a.named = !isDefaultLook(a); } }), true);
   }
   function seedGrid(filterFn, onPick) {
     const grid = el('div', 'seedgrid'); let any = false;
@@ -1273,7 +1304,8 @@
       if (!filterFn(k)) continue; any = true;
       const d = PLANTS[k], n = S.seeds[k] || 0;
       const b = el('button', 'seedbtn' + (n ? '' : ' empty'));
-      b.innerHTML = `<div class="em">${d.emoji}</div><div class="nm">${d.name}</div><div class="ct">${n} seed${n === 1 ? '' : 's'}</div>`;
+      const planted = S.plants.filter(p => p && p.id === k).length;
+      b.innerHTML = `<div class="em">${d.emoji}</div><div class="nm">${d.name}</div><div class="ct">${n} seed${n === 1 ? '' : 's'}</div><div class="pl">🌱 ${planted} planted</div>`;
       b.onclick = () => onPick(k, n);
       grid.appendChild(b);
     }

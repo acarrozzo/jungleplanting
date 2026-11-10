@@ -30,8 +30,10 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: 
 #seedbar::-webkit-scrollbar { display: none; }
 .chip { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; border: 3px solid transparent; border-radius: 999px; background: rgba(255,255,255,0.92); padding: 6px 12px 6px 8px; font-size: 16px; font-weight: 800; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.25); min-height: 44px; }
 .chip .em { font-size: 24px; }
-.chip { position: relative; }
-.chip .pc { position: absolute; top: -7px; left: -7px; min-width: 19px; height: 19px; border-radius: 10px; background: #2e8b3a; color: #fff; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; padding: 0 4px; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+.chip .col { display: flex; flex-direction: column; align-items: flex-start; line-height: 1; gap: 2px; }
+.chip .n { font-size: 17px; }
+.chip .pl { font-size: 12px; color: #2e8b3a; font-weight: 800; }
+.chip .pl.none { color: #9aa89c; }
 .chip.sel { border-color: #ffd21f; background: #fff8d6; transform: translateY(-3px); }
 .chip.empty { opacity: 0.55; }
 .seedgroup { flex: 0 0 auto; display: flex; align-items: center; align-self: stretch; padding: 0 6px 0 10px; margin-left: 4px; border-left: 3px solid rgba(255,255,255,0.7); }
@@ -46,23 +48,35 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: 
 .card h2 { margin: 0; font-size: 22px; text-align: center; }
 .card .sub { margin: 0; text-align: center; color: #4a5a4c; font-size: 15px; }
 .card .preview { width: 240px; height: 200px; margin: 0 auto; border-radius: 16px; background: #dff3d8; }
-/* compact customizer: fits a phone screen without scrolling */
-.card.compact { gap: 8px; padding: 14px 16px 16px; }
-.card.compact h2 { font-size: 19px; }
-.card.compact .sub { font-size: 13px; }
-.custbody { display: grid; grid-template-columns: 1fr; gap: 8px; }
-.custleft { display: flex; flex-direction: column; gap: 6px; align-items: center; }
-.custleft .inline { width: 100%; max-width: 240px; }
-.card.compact .preview { width: 160px; height: 130px; margin: 0; }
-.card.compact input { font-size: 16px; padding: 8px 10px; }
-.custright { display: flex; flex-direction: column; gap: 6px; }
-.optrow { display: flex; align-items: center; gap: 6px; }
-.optrow label { flex: 0 0 42px; font-size: 12px; font-weight: 800; color: #2d4a32; }
-.optrow .swatches, .optrow .accs { flex-wrap: wrap; gap: 4px; min-width: 0; }
-.optrow .sw { width: 28px; height: 28px; border-width: 2px; }
-.optrow .acc { width: 28px; height: 28px; font-size: 15px; border-radius: 8px; border-width: 2px; padding: 0; }
-.card.compact button.big { padding: 12px; font-size: 17px; }
-@media (min-width: 600px) and (min-height: 300px) { #sheetCard:has(.card.compact) { width: min(96vw, 580px); } .custbody { grid-template-columns: 180px 1fr; align-items: start; } .custleft .inline { max-width: none; } }
+/* dress-up card: tinted hero with the live portrait and name, facts, then colours and hats */
+.card.cust { padding: 0 0 14px; gap: 0; }
+.custmain { display: grid; grid-template-columns: 1fr; }
+.custhero { background: radial-gradient(circle at 50% 60%, var(--hc, #dff3d8) 0%, #fffdf5 80%); padding: 14px 16px 12px; border-radius: 24px 24px 0 0; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.custhero h2 { font-size: 20px; }
+.custhero .sub { font-size: 13px; }
+.custhero .preview { width: 200px; height: 150px; margin: 0; border-radius: 18px; box-shadow: 0 6px 16px rgba(0,0,0,0.18); border: 3px solid #fff; }
+.namebox { display: flex; align-items: center; gap: 4px; background: #fff; border-radius: 999px; padding: 4px 4px 4px 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+.namebox .pen { font-size: 14px; opacity: 0.6; }
+.namebox input { border: none; outline: none; font: inherit; font-weight: 800; font-size: 18px; width: 140px; text-align: center; background: transparent; color: #1b2a1d; }
+.namebox button.small { border-radius: 999px; width: 36px; height: 36px; padding: 0; font-size: 16px; }
+.custside { display: flex; flex-direction: column; gap: 10px; padding: 10px 14px 0; }
+.facts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.facts .pill { background: #e3ecdf; box-shadow: none; font-size: 13px; padding: 5px 10px; font-weight: 700; }
+.custopts { display: flex; flex-direction: column; gap: 8px; background: #fff; border: 2px solid #e3ecdf; border-radius: 16px; padding: 10px 12px; }
+.optrow { display: flex; align-items: center; gap: 8px; }
+.optrow label { flex: 0 0 50px; font-size: 11px; font-weight: 800; color: #2d4a32; text-transform: uppercase; letter-spacing: 0.5px; }
+.optrow .swatches, .optrow .accs { flex-wrap: wrap; gap: 5px; min-width: 0; }
+.optrow .sw { width: 30px; height: 30px; border-width: 2px; }
+.optrow .acc { width: 34px; height: 34px; font-size: 18px; border-radius: 10px; border-width: 2px; padding: 0; }
+.custacts { display: flex; gap: 8px; }
+.custacts button.big { flex: 1; padding: 11px 8px; font-size: 15px; }
+.card.cust button.done { margin: 10px 14px 0; }
+@media (min-width: 600px) and (min-height: 300px) {
+  #sheetCard:has(.card.cust) { width: min(96vw, 640px); }
+  .custmain { grid-template-columns: 250px 1fr; }
+  .custhero { border-radius: 24px 0 0 0; justify-content: center; }
+  .custside { padding: 14px 14px 0 0; justify-content: center; }
+}
 #watchPill { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(84px + env(safe-area-inset-bottom)); border: none; border-radius: 999px; background: rgba(27,42,29,0.92); color: #fff; font-weight: 800; font-size: 14px; padding: 10px 16px; cursor: pointer; z-index: 4; font-family: inherit; animation: pop .2s ease-out; }
 #watchPill.hidden { display: none; }
 #flash { position: fixed; inset: 0; background: #fff; z-index: 20; pointer-events: none; animation: flashout .35s ease-out forwards; }
@@ -91,6 +105,7 @@ button.small { font-size: 14px; font-weight: 800; padding: 8px 12px; border-radi
 .seedbtn .em { font-size: 32px; }
 .seedbtn .nm { font-weight: 800; font-size: 13px; text-align: center; }
 .seedbtn .ct { font-size: 12px; color: #4a5a4c; font-weight: 700; }
+.seedbtn .pl { font-size: 12px; color: #2e8b3a; font-weight: 800; }
 .seedbtn.empty { opacity: 0.45; }
 .booklist { display: flex; flex-direction: column; gap: 8px; }
 .bookitem { display: flex; align-items: center; gap: 10px; background: #fff; border-radius: 14px; padding: 8px 10px; border: 2px solid #e3ecdf; }
@@ -167,9 +182,9 @@ button.small { font-size: 14px; font-weight: 800; padding: 8px 12px; border-radi
 }
 /* Short screens (phones held sideways): tighter customizer so nothing scrolls */
 @media (max-height: 430px) {
-  .card.compact { gap: 5px; padding: 10px 14px 12px; }
-  .card.compact .sub { display: none; }
-  .card.compact .preview { width: 140px; height: 104px; }
-  .card.compact button.big { padding: 9px; font-size: 16px; }
+  .custhero { padding: 8px 12px 8px; gap: 5px; }
+  .custhero .sub { display: none; }
+  .custhero .preview { width: 150px; height: 112px; }
+  .custacts button.big, .card.cust button.done { padding: 8px; font-size: 15px; }
   .optrow .sw { width: 26px; height: 26px; }
 }

@@ -428,11 +428,12 @@ const Draw = (() => {
   }
 
   // x, baseY = where the plant meets the ground (or the water surface for water plants)
-  function drawPlant(ctx, x, baseY, def, plant, t, night) {
+  // k < 1 draws a smaller plant (the flower patches) while the stars and grow bar stay full size
+  function drawPlant(ctx, x, baseY, def, plant, t, night, k = 1) {
     const m = plantMetrics(def, plant.progress, plant.level);
     const pr = Math.min(1, plant.progress);
     const water = def.kind === 'water';
-    ctx.save(); ctx.translate(x, baseY);
+    ctx.save(); ctx.translate(x, baseY); ctx.scale(k, k);
     if (water) { ctx.globalAlpha = 0.5; ell(ctx, 0, 2, 26 * m.s + 8, 5, '#dff4ff'); ctx.globalAlpha = 1; }
     else ell(ctx, 0, 4, 20, 7, '#5a3b1e');
     if (pr < 0.12) {
@@ -586,8 +587,9 @@ const Draw = (() => {
     }
     ctx.restore();
     // level stars under every sprouted plant: gold = current level, faint = levels still to earn
-    if (!plant.pending && pr < 1) drawGrowBar(ctx, x, baseY + (water ? 10 : UI_DY), pr, t);
-    else if (!plant.pending) drawLevelStars(ctx, x, baseY + (water ? 10 : UI_DY), plant.level || 1, t);
+    const uy = baseY + (water ? 10 : k < 1 ? 14 : UI_DY);
+    if (!plant.pending && pr < 1) drawGrowBar(ctx, x, uy, pr, t);
+    else if (!plant.pending) drawLevelStars(ctx, x, uy, plant.level || 1, t);
     return m;
   }
 

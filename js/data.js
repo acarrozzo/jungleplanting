@@ -17,7 +17,7 @@ const WORLD = {
   // and animals walk either behind the plant row or out in front of it. Things further back are also drawn a little smaller.
   PLANT_DY: 22,
   FLOWER_SLOTS: [361, 525, 689, 853, 1017, 1181], // small flower patches in front of everything (between the tree trunks); flowers and bushes only
-  FLOWER_DY: 56,                                   // the patches sit this far below the ground line, in front of the animals
+  FLOWER_DY: 68,                                   // the patches sit this far below the ground line, in front of the animals
   LANES: { person: [0, 6], animalBack: [9, 15], animalFront: [28, 36] },
   DAY: 180, NIGHT: 90,    // seconds (3 minute day, 1.5 minute night)
 };
@@ -65,7 +65,7 @@ const PLANTS = {
 };
 
 // Animals. kind: bird (flies, perches on tree tops) | climber (sits in canopy) | bug (hovers at flowers)
-// ground (walks) | lake (swims; amphibious = chance a trip goes onto land, up to `shore` units from the lake) | glow (fireflies). active: day | night | both. home: 'cave' = sleeps in the cave when off duty.
+// size: drawn this much bigger than the standard critter (elephant). ground (walks) | lake (swims; amphibious = chance a trip goes onto land, up to `shore` units from the lake) | glow (fireflies). active: day | night | both. home: 'cave' = sleeps in the cave when off duty.
 // req(s): when it may come. eats: fruit of these plants. brings: seeds it may drop. gift: seconds between gifts.
 const ANIMALS = {
   parrot:      { name: 'Parrot',      kind: 'bird',    active: 'day',   max: 1, speed: 140, hint: 'Loves mango and palm trees',               req: s => s.grown('mango') + s.grown('palm') >= 1, eats: ['mango', 'papaya', 'palm'], brings: ['cacao', 'mango'], gift: 64, sound: 'chirp', c1: '#ff3b3b', c2: '#2f6bff' },
@@ -77,7 +77,7 @@ const ANIMALS = {
   bee:         { name: 'Bee',         kind: 'bug',     active: 'day',   max: 2, speed: 90,  hint: 'Needs 2 flowers',                          req: s => s.flowers >= 2, eats: ['flower', 'rainbow', 'orchid', 'lily'], brings: ['flower', 'rainbow'], gift: 72, giftChance: 0.3, sound: 'buzz', c1: '#ffd21f', c2: '#222222' },
   capybara:    { name: 'Capybara',    kind: 'ground',  active: 'day',   max: 1, speed: 40,  hint: 'Likes a half-full lake and a tree',        req: s => s.lake >= 0.5 && s.trees >= 1, eats: ['berry', 'bamboo'], brings: ['lily', 'berry'], gift: 96, nearLake: true, c1: '#a86f3a', c2: '#5a3a1a' },
   tapir:       { name: 'Tapir',       kind: 'ground',  active: 'day',   max: 1, speed: 45,  hint: 'Comes when 4 trees are grown',             req: s => s.trees >= 4, eats: ['fig', 'mango', 'papaya'], brings: ['fig'], gift: 80, c1: '#3a3a3a', c2: '#e8e8e8' },
-  elephant:    { name: 'Elephant',    kind: 'ground',  active: 'day',   max: 1, speed: 35,  hint: 'Rare! Needs 7 grown trees. Drinks at the lake and sprays the plants', req: s => s.trees >= 7, eats: ['banana', 'mango', 'fig', 'papaya', 'nut'], brings: ['golden'], gift: 96, chance: 0.1, sound: 'trumpet', c1: '#8d8d9a', c2: '#c9b3c9' },
+  elephant:    { name: 'Elephant',    kind: 'ground',  active: 'day',   max: 1, speed: 35,  hint: 'Rare! Needs 7 grown trees. Drinks at the lake and sprays the plants', req: s => s.trees >= 7, eats: ['banana', 'mango', 'fig', 'papaya', 'nut'], brings: ['golden'], gift: 96, chance: 0.1, size: 1.3, sound: 'trumpet', c1: '#8d8d9a', c2: '#c9b3c9' },
   gorilla:     { name: 'Gorilla',     kind: 'ground',  active: 'day',   max: 1, speed: 50,  hint: 'Needs 5 grown trees and bananas. Jumps up and hangs in the trees!',          req: s => s.trees >= 5 && s.grown('banana') >= 1, eats: ['banana', 'bamboo', 'berry'], brings: ['bamboo', 'banana'], gift: 72, sound: 'ooh', c1: '#2b2b2b', c2: '#6d6d6d' },
   bear:        { name: 'Bear',        kind: 'ground',  active: 'day',   max: 1, speed: 45, hint: 'Lives in the cave. Comes when berries and 3 trees are grown', req: s => s.grown('berry') >= 1 && s.trees >= 3, eats: ['berry', 'fig', 'nut'], brings: ['berry', 'nut'], gift: 80, home: 'cave', sound: 'growl', c1: '#6b4a2b', c2: '#c9a27a' },
   beaver:      { name: 'Beaver',      kind: 'ground',  active: 'both',  max: 1, speed: 55, hint: 'Comes when the lake is 70% full and 3 trees are grown. Builds a dam from sticks, and can chop a tree for wood!', req: s => s.lake >= 0.7 && s.trees >= 3, eats: ['bamboo'], brings: ['bamboo', 'nut'], gift: 90, nearLake: true, swims: true, c1: '#7a4a2a', c2: '#3a2a1a' },
