@@ -14,11 +14,11 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 ## World and time
 
 - The world is 1700 × 560 units. Ground is at y = 430 and is grass all the way down. A cave sits at x = 85 on the left. The camp (tent and campfire) sits in the lower foreground at x = 200, 84 units below the ground line, so it takes no room on the planting row. The lake basin starts at x = 1270, is 115 units deep (seaweed sways on the bottom) and ends at a waterfall cliff at x = 1658. The beaver's dam goes at x = 1610.
-- 14 plots in all: 12 land planting spots every 82 units from x = 320, and 2 floating lake spots at x = 1385 and 1500 that take water plants only. Three decorative lily pads float at x = 1335, 1442, 1558.
+- 20 plots in all: 12 tree spots every 82 units from x = 320 on the back row (trees only), 2 floating lake spots at x = 1385 and 1500 (water plants only), and 6 flower patches out front at x = 361, 525, 689, 853, 1017, 1181 (`WORLD.FLOWER_SLOTS`, 56 units below the ground line, flowers and bushes only, always open). Slot indices: 0–11 trees, 12–13 lake, 14–19 flower patches. Three decorative lily pads float at x = 1335, 1442, 1558.
 - **Depth.** Lower on screen means nearer. Measured in units below the ground line: people walk at 0 to 6 (the back), animals behind the plants at 9 to 15, the plant row is at 22, animals in front of the plants at 28 to 36, then the level stars and grow bars (46) and + buttons (52), and the camp at 84. Everything on land is painted back to front in one pass, and drawn from 90% size at the back to 112% at the front. An animal visiting a plant (to eat, be watered, chop) stands in front of it. A wandering animal picks the front or back lane 50/50 each trip and drifts between them as it walks. Birds, climbers and bugs are always on top. Lane numbers live in `WORLD.LANES` and `WORLD.PLANT_DY`.
 - A day is 180 s of daylight plus 90 s of night (270 s). A new jungle starts 25 s into Day 1. The day number is `floor(t / 270) + 1`; when it changes, sunrise happens.
 - Game time only advances while the page is open, no sheet is showing and the game is not paused. The ⏸️ button pauses; switching apps or tabs pauses automatically. There is no offline growth.
-- Autosave every 5 s and whenever the tab hides, to `localStorage` under `junglePlanting.save.v1` (save format version 4). Older saves are migrated on load. Version 2 (16 + 3 spots): the first 12 land plants and 2 lake plants are kept and the rest refunded as seeds, including the seeds spent on their levels. Version 3 (10 + 2 spots): the lake plants move to the new lake indexes and people and animals are put back on their lanes.
+- Autosave every 5 s and whenever the tab hides, to `localStorage` under `junglePlanting.save.v1` (save format version 5). Older saves are migrated on load. Version 4 → 5: flowers and bushes that were on the tree row move to the flower patches (extras are refunded as seeds, upgrade seeds included), pending seeds go back in the pocket, and every animal finds a new perch. Version 2 (16 + 3 spots): the first 12 land plants and 2 lake plants are kept and the rest refunded as seeds, including the seeds spent on their levels. Version 3 (10 + 2 spots): the lake plants move to the new lake indexes and people and animals are put back on their lanes.
 
 ## Customizing
 
@@ -33,7 +33,7 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 ## Helping the player
 
 - The 💡 What now? button was removed. The game no longer points the player at a next step.
-- 👀 **Watch**: every animal and person card (and the Jungle Book rows) has a Zoom in and watch button. The camera zooms to at least 1.7× and follows that entity until the player swipes, pinches, scrolls, zooms or taps the Watching pill.
+- 👀 **Watch**: every animal and person card (and the Jungle Book rows) has a Zoom in and watch button. The camera zooms to at least 1.7× and follows that entity, keeping it in the middle of the screen both across and up and down (the watched friend sits at 55% of the screen height; the view drifts back to normal when watching stops), until the player swipes, pinches, scrolls, zooms or taps the Watching pill.
 - **Follow the action**: when an animal arrives, a new seed kind appears or a dam stage finishes, the camera glides there. It stays put if a sheet is open, a seed is picked, a finger is on the screen, something is being watched, the game is paused, or the player moved the camera in the last 4 s. The menu has a toggle to turn following off (saved).
 - Every tap on the canvas draws a quick white ripple so a miss still gets feedback.
 - 📸 **Take a picture** in the menu saves the canvas as a PNG named with the day, with a small caption in the corner. The HUD is not part of the canvas so it never appears in the photo.
@@ -46,7 +46,7 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 
 ## Planting spots
 
-- 4 land spots are open at the start. Each newcomer opens 2 more, so all 12 are open once the fifth person has arrived. Tapping thick jungle lets you spend 3 seeds of one kind to have a person clear 1 spot right away. Lake spots are always open.
+- Flower patches are always open. 4 tree spots are open at the start. Each newcomer opens 2 more, so all 12 are open once the fifth person has arrived. Tapping thick jungle lets you spend 3 seeds of one kind to have a person clear 1 spot right away. Lake spots are always open.
 - Every open empty spot shows a round + button under it. Tapping the spot or the button with a seed selected plants it; the button bounces while a seed is picked. Without a selection, the seed picker opens, filtered to land or water seeds.
 
 ## People
@@ -67,7 +67,7 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 
 - Plants have levels 1 to 3. Upgrading costs `level + 1` seeds of the same kind, so 2 seeds for level 2 and 3 for level 3, and only works on a grown plant.
 - Each level adds 15% size, +1 max fruit, 20% faster fruit, and +15% seed chance when an animal eats from the plant.
-- Three stars sit under every sprouted plant. Gold stars show the current level, faint ones show what is left to earn. The same stars appear in the hover tag, the plant sheet and My Plants.
+- Three stars sit under every sprouted plant. Gold stars show the current level, faint ones show what is left to earn. The same stars appear in the hover tag, the plant sheet and the Jungle Book. Each seed button in the bar also wears a small green badge with how many of that plant are planted.
 - Replace removes the plant, refunds 1 seed of its kind, and opens the seed picker for that spot. An animal perched there flies off and picks a new target.
 
 ## Rain and lake
@@ -89,7 +89,7 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 ### Behaviour by kind
 
 - **bird** flies in from the side of the screen and perches on tree tops.
-- **climber** sits in a canopy (the tree frog sits lower on the trunk).
+- **climber** sits in a canopy (the tree frog sits lower on the trunk). Neither flies: the sloth climbs to vine height, hangs its way across hand over hand along a vine drawn between the two trees (3× speed while arriving or leaving), then climbs down into the new canopy; the tree frog travels in hops of up to 70 units with a short rest between them, and arrives and leaves along the ground.
 - **bug** hovers at flowers and lilies.
 - **ground** walks in from the left along the ground, and always leaves by the left edge too (night animals used to exit through the lake when they were on the right half). The gorilla ends 40% of its trips (`RULES.gorilla.hangChance`) by walking under a grown tree (any tree but bamboo), jumping up and hanging from the low canopy for 5 to 10 s (`hangTime`), swinging and sometimes waving, then dropping back down; it lets go early at dusk or if the tree is removed. The armadillo rolls into an armoured ball for 60% of its trips (2.4× speed) and stays curled up for 30% of its rests, peeking out. Capybara and frog prefer the lake shore. The frog hops (55% of the time it picks a target) onto a lily pad or a grown water lily and sits there at the water line.
 - **lake** swims in the lake, fish at a random depth. Three swimmers are amphibious (`amphibious` = share of trips that go onto land, `shore` = how far from the lake they walk): crocodile 40% / 190 units (suns itself in front of the plants), duck 40% / 340 (waddles on orange legs), otter 35% / 260 (trots on four short legs, and only starts a waterfall slide from the water). On land they join the depth-sorted pass, pick a lane like ground animals (duck and otter behind or in front of the plants) and splash when they cross the shoreline. Each lake species keeps to a zone of the open water (0 = shore, 1 = falls): turtle 0 to 0.3, duck 0.15 to 0.6, crocodile 0.55 to 0.85, otter 0.85 to 1, fish anywhere. When the otter gets bored it rides the waterfall down into the plunge pool 45% of the time.

@@ -16,6 +16,8 @@ const WORLD = {
   // Depth: how far below the ground line things stand (lower on screen = nearer). People keep to the back, plants grow on a front row,
   // and animals walk either behind the plant row or out in front of it. Things further back are also drawn a little smaller.
   PLANT_DY: 22,
+  FLOWER_SLOTS: [361, 525, 689, 853, 1017, 1181], // small flower patches in front of everything (between the tree trunks); flowers and bushes only
+  FLOWER_DY: 56,                                   // the patches sit this far below the ground line, in front of the animals
   LANES: { person: [0, 6], animalBack: [9, 15], animalFront: [28, 36] },
   DAY: 180, NIGHT: 90,    // seconds (3 minute day, 1.5 minute night)
 };

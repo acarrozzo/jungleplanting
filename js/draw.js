@@ -324,6 +324,12 @@ const Draw = (() => {
     ctx.strokeStyle = hot ? '#b8860b' : '#2e8b3a'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, by, r, 0, TAU); ctx.stroke();
     line(ctx, x - 6, by, x + 6, by, '#2e8b3a', 3.5); line(ctx, x, by - 6, x, by + 6, '#2e8b3a', 3.5);
   }
+  // a flower patch: a little oval of darker grass with a few tufts, in the front row
+  function drawPatch(ctx, x) {
+    const gy = WORLD.GROUND_Y;
+    ell(ctx, x, gy + 3, 24, 7, '#2f7a33'); ell(ctx, x, gy + 2, 18, 4.5, '#3f9a40');
+    for (let i = 0; i < 5; i++) { const px = x - 16 + i * 8, h = 5 + seeded(x + i) * 5; line(ctx, px, gy + 2, px + (i % 2 ? 2 : -2), gy - h, '#5ab34f', 1.6); }
+  }
   function drawMound(ctx, x, highlight) {
     const gy = WORLD.GROUND_Y;
     ell(ctx, x, gy + 4, 20, 7, '#5a3b1e');
@@ -704,9 +710,9 @@ const Draw = (() => {
     return { hx: 0, hy: -31, hr: 9.5 };
   };
   C.sloth = (ctx, o) => {
-    const { c1, c2 } = o;
-    line(ctx, -8, -24, -16, -40, c1, 5); line(ctx, 8, -24, 16, -40, c1, 5);
-    circ(ctx, -16, -41, 3, '#555'); circ(ctx, 16, -41, 3, '#555');
+    const { c1, c2 } = o; const sw = o.moving ? Math.sin(o.t * 2.5) * 5 : 0; // slow hand over hand along the vine
+    line(ctx, -8, -24, -16 + sw, -40, c1, 5); line(ctx, 8, -24, 16 + sw, -40, c1, 5);
+    circ(ctx, -16 + sw, -41, 3, '#555'); circ(ctx, 16 + sw, -41, 3, '#555');
     ell(ctx, 0, -14, 13, 14, c1); ell(ctx, 0, -11, 8, 9, shade(c1, 25));
     line(ctx, -6, -4, -8, 0, c1, 5); line(ctx, 6, -4, 8, 0, c1, 5);
     circ(ctx, 0, -29, 10, c2);
@@ -1021,5 +1027,5 @@ const Draw = (() => {
     ctx.fillStyle = '#fff'; ctx.fillText(text, x, y);
   }
 
-  return { setView, ell, circ, rect, rrect, line, poly, eye, smile, shade, lerpColor, seeded, nightFactor, drawSky, drawStars, drawSunMoon, drawClouds, drawFarJungle, drawGround, drawBush, drawMound, drawCave, drawCliff, drawFalls, drawStick, drawDam, drawLilyPad, drawPlantButton, sunMoonPos, drawSunMoonAt, waterY, drawLakeBasin, drawSeaweed, drawWater, drawWaterFront, plantMetrics, drawPlant, drawWaterSpot, levelScale, star, drawLevelStars, drawAccessory, drawPerson, drawCritter, drawFireflies, drawZzz, drawLabel, drawTent, drawCampGlow, drawBubble };
+  return { setView, ell, circ, rect, rrect, line, poly, eye, smile, shade, lerpColor, seeded, nightFactor, drawSky, drawStars, drawSunMoon, drawClouds, drawFarJungle, drawGround, drawBush, drawMound, drawCave, drawCliff, drawFalls, drawStick, drawDam, drawLilyPad, drawPlantButton, sunMoonPos, drawSunMoonAt, waterY, drawLakeBasin, drawSeaweed, drawWater, drawWaterFront, plantMetrics, drawPlant, drawWaterSpot, levelScale, star, drawLevelStars, drawAccessory, drawPerson, drawCritter, drawFireflies, drawZzz, drawLabel, drawTent, drawCampGlow, drawBubble, drawPatch };
 })();

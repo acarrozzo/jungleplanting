@@ -27,7 +27,7 @@ It is a static site, so any static host works. For Vercel: import the GitHub rep
 - A beaver comes when the lake is full and trees are grown. Trees drop sticks; tap them (or let the beaver fetch them) and it builds a dam in three stages that keeps the lake from draining. A full lake spills over the dam, and the otter slides down the waterfall.
 - ⏸️ pauses the game. It also pauses on its own when you switch apps.
 - 👀 on any name card zooms in and follows that animal or person. The camera also glides to new arrivals unless you are busy (toggle in the menu).
-- 14 plots: 12 on land and 2 floating in the lake. On a 1024px screen or wider, zooming all the way out shows the whole jungle.
+- 20 plots: 12 tree spots on the back row, 6 flower patches out front, and 2 floating in the lake. On a 1024px screen or wider, zooming all the way out shows the whole jungle, and the scroll arrows fade away.
 - ⛺ People sleep in the tent in the foreground at night, next to a campfire. They still get up to plant if you ask.
 - 🐘 The elephant drinks at the lake and sprays the plants, which makes them grow faster for a while.
 - 🪓 Tap a grown tree to let the beaver chop it down. The wood goes into the dam and the spot is free again.
@@ -41,7 +41,8 @@ It is a static site, so any static host works. For Vercel: import the GitHub rep
 - Tap a grown plant to make it bigger with spare seeds (up to level 3) or swap it for a new seed.
 - Tap the thick jungle to clear a new spot for 3 seeds. A new friend also arrives every sunrise (up to 5) and clears 2 spots.
 - Tap any person or animal to rename it and pick colors and a hat. The ↩️ button on a name card restores the original look. The sun and moon can be dressed up too, and their sheet can call the next sunset or sunrise early.
-- The 🌱 button lists every plant you own with its growth, fruit, level and spot. Tap 👀 to jump to it.
+- The 📖 Jungle Book has three tabs: Animals (who has visited and who is still hiding), Plants (every plant with its growth, fruit, level and spot, plus the seed kinds found so far) and People. Tap 👀 to jump to anything.
+- On a keyboard, Esc closes any pop-up.
 - The seed bar groups seeds: trees first, then flowers, then lake plants. On a computer, point at a seed to see what it grows into and who loves it.
 - On a computer, point at anything and it glows softly with its name, handy when animals and plants overlap.
 - Every plant shows 1 to 3 stars under it for its level. Spare seeds of the same kind buy the next star.

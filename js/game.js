@@ -5,7 +5,7 @@
   const ctx = canvas.getContext('2d');
   const $ = id => document.getElementById(id);
   const SAVE_KEY = 'junglePlanting.save.v1';
-  const SAVE_VERSION = 4;
+  const SAVE_VERSION = 5;
   const rand = (a, b) => a + Math.random() * (b - a);
   const pick = arr => arr[Math.floor(Math.random() * arr.length)];
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -16,7 +16,8 @@
 
   const GY = WORLD.GROUND_Y;
   const WATER0 = WORLD.MAX_SLOTS;
-  const TOTAL_SLOTS = WATER0 + WORLD.LAKE_SLOTS.length;
+  const FLOWER0 = WATER0 + WORLD.LAKE_SLOTS.length;          // flower patches come after the lake spots
+  const TOTAL_SLOTS = FLOWER0 + WORLD.FLOWER_SLOTS.length;
   let S = null;
   // camera: base scale from the screen size, zoom on top, x scroll and a vertical nudge (oy)
   const cam = { x: 0, oy: 0, zoom: 1, base: 1, scale: 1, offY: 0, viewW: 0, targetX: null };
@@ -26,15 +27,20 @@
   let fallen = [];
   let hover = null, focus = null, paused = false, watch = null, lastInput = 0, ripples = [], photoT = 0; const mouse = { sx: 0, sy: 0, active: false };
   let saveT = 0, hudT = 0, ambientT = 6, lastFrame = performance.now();
-  let sheetOpen = false, sheetDismissable = false;
+  let sheetOpen = false, sheetDismissable = false, settleY = false;
 
-  const isWaterSlot = i => i >= WATER0;
-  const slotX = i => isWaterSlot(i) ? WORLD.LAKE_SLOTS[i - WATER0] : WORLD.SLOT_X0 + i * WORLD.SLOT_DX;
-  const PY = GY + WORLD.PLANT_DY;       // the plant row: land plants stand in front of the ground line
+  // three kinds of spot: the tree row (0..WATER0-1), the floating lake spots, and the flower patches out front
+  const isWaterSlot = i => i >= WATER0 && i < FLOWER0;
+  const isFlowerSlot = i => i >= FLOWER0;
+  const slotClass = i => isWaterSlot(i) ? 'water' : isFlowerSlot(i) ? 'flower' : 'tree';
+  const seedClass = id => PLANTS[id].kind === 'water' ? 'water' : PLANTS[id].kind === 'tree' ? 'tree' : 'flower';
+  const slotX = i => isWaterSlot(i) ? WORLD.LAKE_SLOTS[i - WATER0] : isFlowerSlot(i) ? WORLD.FLOWER_SLOTS[i - FLOWER0] : WORLD.SLOT_X0 + i * WORLD.SLOT_DX;
+  const PY = GY + WORLD.PLANT_DY;       // the tree row: trees stand in front of the ground line
+  const FY = GY + WORLD.FLOWER_DY;      // the flower patches: in front of the animals
   const STICK_Y = PY + 8, TENT_Y = GY + WORLD.TENT_DY;
-  const slotY = i => isWaterSlot(i) ? Draw.waterY(S.lake) : PY;
-  const slotOpen = i => isWaterSlot(i) || i < S.slotsOpen;
-  const seedFits = (id, i) => (PLANTS[id].kind === 'water') === isWaterSlot(i);
+  const slotY = i => isWaterSlot(i) ? Draw.waterY(S.lake) : isFlowerSlot(i) ? FY : PY;
+  const slotOpen = i => isWaterSlot(i) || isFlowerSlot(i) || i < S.slotsOpen;
+  const seedFits = (id, i) => seedClass(id) === slotClass(i);
   const landY = e => GY + (e.lane || 0); // feet of a person or ground animal in its depth lane
   const depthScale = y => clamp(0.9 + (y - GY) * 0.0055, 0.9, 1.12); // further back = a little smaller
   const frontLane = () => rand(...WORLD.LANES.animalFront), backLane = () => rand(...WORLD.LANES.animalBack);
@@ -81,6 +87,7 @@
       if (s.v === 1) { s.v = 2; (s.plants || []).forEach(p => { if (p) p.level = 1; }); s.tips = {}; }
       if (s.v === 2) migrateV2(s);
       if (s.v === 3) migrateV3(s);
+      if (s.v === 4) migrateV4(s);
       if (s.v !== SAVE_VERSION) return null;
       s.plants = s.plants || []; while (s.plants.length < TOTAL_SLOTS) s.plants.push(null);
       s.animals = (s.animals || []).filter(a => ANIMALS[a.sp]);
@@ -131,6 +138,22 @@
     for (const pe of s.people || []) { const T = pe.task; if (T && (T.type === 'plant' || T.type === 'planting')) { up(T); s.queue.push({ slot: T.slot, id: T.id }); } else if (T && (T.type === 'clear' || T.type === 'clearing')) s.queue.push({ clear: true }); if (T && T.type !== 'arrive') pe.task = null; }
     s.sticks = []; relane(s);
   }
+  // v4 grew flowers and bushes on the tree row; v5 gives them their own patches out front. Move them over, hand extras back as seeds.
+  function migrateV4(s) {
+    s.v = 5; s.seeds = s.seeds || {}; s.queue = s.queue || [];
+    const refund = p => { const lv = p.level || 1; s.seeds[p.id] = (s.seeds[p.id] || 0) + (p.pending ? 1 : 1 + (lv >= 2 ? 2 : 0) + (lv >= 3 ? 3 : 0)); };
+    const old = s.plants || []; while (old.length < FLOWER0) old.push(null);
+    const plants = Array(TOTAL_SLOTS).fill(null), flowers = [];
+    old.slice(0, FLOWER0).forEach((p, i) => {
+      if (!p) return;
+      if (p.pending) { refund(p); return; }                         // a seed still in someone's hands goes back in the pocket
+      if (i < WATER0 && PLANTS[p.id] && PLANTS[p.id].kind !== 'tree') flowers.push(p); else plants[i] = p;
+    });
+    flowers.forEach((p, k) => { if (k < WORLD.FLOWER_SLOTS.length) plants[FLOWER0 + k] = p; else refund(p); });
+    s.plants = plants; s.queue = s.queue.filter(q => q.clear); s.sticks = []; s.chop = null; s.moved = flowers.length;
+    for (const pe of s.people || []) { const T = pe.task; if (T && T.type !== 'arrive' && T.type !== 'toTent' && T.type !== 'sleep') pe.task = null; }
+    for (const a of s.animals || []) { a.slot = -1; a.pad = null; a.retarget = true; }
+  }
   function relane(s) {
     for (const pe of s.people || []) { pe.lane = rand(...WORLD.LANES.person); pe.y = GY + pe.lane; if (!pe.task) pe.x = clamp(pe.x || 0, WORLD.LAND_X0, WORLD.LAKE_X - 60); }
     for (const a of s.animals || []) { a.lane = backLane(); a.retarget = true; }
@@ -165,7 +188,7 @@
     cam.viewW = W / cam.scale;
     const anchor = (H > W ? 0.75 : 0.7) + Math.max(0, cam.zoom - 1) * 0.12;
     const base = H * anchor - GY * cam.scale;
-    const lo = Math.min(base, H - (GY + WORLD.LAKE_FLOOR + 100) * cam.scale), hi = Math.max(base, 0);
+    const lo = Math.min(base, H - (GY + WORLD.LAKE_FLOOR + 100) * cam.scale), hi = watch || settleY ? Math.max(base, 0, base + cam.oy) : Math.max(base, 0); // watching may lift the view above the usual limit
     cam.offY = clamp(base + cam.oy, lo, hi); cam.oy = cam.offY - base;
     cam.x = clamp(cam.x, 0, Math.max(0, WORLD.W - cam.viewW));
   }
@@ -181,10 +204,12 @@
   function worldTransform() { ctx.setTransform(dpr * cam.scale, 0, 0, dpr * cam.scale, -cam.x * cam.scale * dpr, cam.offY * dpr); }
   function toWorld(sx, sy) { return { x: sx / cam.scale + cam.x, y: (sy - cam.offY) / cam.scale }; }
   function updateCamera(dt) {
-    if (watch) { const e = watch.a || watch.pe; if ((watch.a && (watch.a.state === 'away' || !S.animals.includes(watch.a))) || (watch.pe && !S.people.includes(watch.pe))) stopWatch(); else { cam.x += (clamp(e.x - cam.viewW / 2, 0, Math.max(0, WORLD.W - cam.viewW)) - cam.x) * Math.min(1, dt * 4); applyCam(); } }
+    if (watch) { const e = watch.a || watch.pe; if ((watch.a && (watch.a.state === 'away' || !S.animals.includes(watch.a))) || (watch.pe && !S.people.includes(watch.pe))) stopWatch(); else { const k = Math.min(1, dt * 4); cam.x += (clamp(e.x - cam.viewW / 2, 0, Math.max(0, WORLD.W - cam.viewW)) - cam.x) * k; cam.oy += (H * 0.55 - e.y * cam.scale - cam.offY) * k; applyCam(); } } // keep the friend in the middle of the screen, up and down too
+    else if (settleY) { cam.oy *= Math.max(0, 1 - dt * 4); if (Math.abs(cam.oy) < 0.5) { cam.oy = 0; settleY = false; } applyCam(); }
     if (scrollDir) { cam.x += scrollDir * cam.viewW * 1.1 * dt; cam.targetX = null; applyCam(); }
     if (cam.targetX != null) { cam.x += (cam.targetX - cam.x) * Math.min(1, dt * 7); if (Math.abs(cam.targetX - cam.x) < 1) { cam.x = cam.targetX; cam.targetX = null; } applyCam(); }
     $('btnLeft').disabled = cam.x <= 0.5; $('btnRight').disabled = cam.x >= WORLD.W - cam.viewW - 0.5;
+    $('scrollctrls').classList.toggle('gone', cam.viewW >= WORLD.W - 1); // the whole jungle is on screen: nothing to scroll to
   }
 
   // ---------- watch an entity / follow the action ----------
@@ -194,7 +219,7 @@
     $('watchPill').textContent = `👀 Watching ${ent.name} · tap to stop`; $('watchPill').classList.remove('hidden');
     Sound.play('chime');
   }
-  function stopWatch() { if (!watch) return; watch = null; $('watchPill').classList.add('hidden'); }
+  function stopWatch() { if (!watch) return; watch = null; settleY = true; $('watchPill').classList.add('hidden'); }
   $('watchPill').onclick = () => { Sound.play('click'); stopWatch(); };
   const userTouched = () => { lastInput = performance.now(); stopWatch(); };
   // glide the camera to something that just happened, unless the kid is in the middle of doing something
@@ -353,7 +378,7 @@
     if (a.lane == null) a.lane = backLane();
     if (sp.home === 'cave') { a.x = WORLD.CAVE_X + rand(-15, 15); a.y = sp.kind === 'ground' ? GY : GY - 30; return; }
     switch (sp.kind) {
-      case 'bird': case 'bug': case 'climber': a.x = left ? cam.x - 80 : cam.x + cam.viewW + 80; a.y = GY - rand(180, 380); break;
+      case 'bird': case 'bug': case 'climber': a.x = left ? cam.x - 80 : cam.x + cam.viewW + 80; a.y = a.sp === 'treefrog' ? GY - 4 : a.sp === 'sloth' ? GY - rand(150, 220) : GY - rand(180, 380); break; // the tree frog hops in along the ground, the sloth along a vine at canopy height
       case 'ground': a.x = -70; a.y = landY(a); break;
       case 'lake': a.x = zoneX(sp); a.depth = a.sp === 'fish' ? rand(10, 40) : 2; a.y = Draw.waterY(S.lake) + a.depth; splash(a.x, Draw.waterY(S.lake)); break;
       case 'glow': a.x = rand(100, WORLD.LAKE_X - 100); a.y = GY - 60; break;
@@ -421,8 +446,38 @@
       case 'glow': a.tx = bx; a.ty = by + m.topY; break;
     }
   }
+  // The sloth never flies: it climbs to vine height, hangs its way across hand over hand, then climbs down into the new canopy.
+  function slothMove(a, dt, speed) {
+    if (!a.path || a.path.tx !== a.tx || a.path.ty !== a.ty) a.path = { tx: a.tx, ty: a.ty, hy: Math.min(a.y, a.ty) - 16, x0: a.x, phase: 0 };
+    const P = a.path, step = speed * (a.state === 'arriving' || a.state === 'leaving' ? 3 : 1) * dt; // a little quicker on the way in, so the kids do not wait a minute for it
+    const toY = y => { const d = y - a.y; if (Math.abs(d) <= step * 1.4) { a.y = y; return true; } a.y += Math.sign(d) * step * 1.4; return false; };
+    if (P.phase === 0) { if (toY(P.hy)) P.phase = 1; return false; }
+    if (P.phase === 1) {
+      const dx = P.tx - a.x; if (Math.abs(dx) > 1) a.face = dx > 0 ? 1 : -1;
+      if (Math.abs(dx) <= step) { a.x = P.tx; P.phase = 2; } else a.x += Math.sign(dx) * step;
+      return false;
+    }
+    if (toY(P.ty)) { a.x = P.tx; a.path = null; return true; }
+    return false;
+  }
+  // The tree frog gets about in hops: a short arc, a little rest, another hop.
+  function frogHop(a, dt) {
+    const dx = a.tx - a.x, dy = a.ty - a.y, dist = Math.hypot(dx, dy);
+    if (!a.hop) {
+      if (dist < 1) { a.x = a.tx; a.y = a.ty; return true; }
+      if (a.rest > 0) { a.rest -= dt; return false; }
+      const len = Math.min(dist, 70), k = len / dist;
+      a.hop = { x0: a.x, y0: a.y, x1: a.x + dx * k, y1: a.y + dy * k, t: 0, d: 0.3 + len / 350 }; a.face = dx > 0 ? 1 : -1;
+    }
+    const h = a.hop; h.t += dt; const k = Math.min(1, h.t / h.d);
+    a.x = h.x0 + (h.x1 - h.x0) * k; a.y = h.y0 + (h.y1 - h.y0) * k - Math.sin(Math.PI * k) * (16 + Math.abs(h.x1 - h.x0) * 0.25);
+    if (k >= 1) { a.hop = null; a.rest = rand(0.15, 0.45); if (Math.hypot(a.tx - a.x, a.ty - a.y) < 1) { a.x = a.tx; a.y = a.ty; return true; } }
+    return false;
+  }
   function moveToward(a, dt, speed) {
     const sp = ANIMALS[a.sp];
+    if (a.sp === 'sloth') return slothMove(a, dt, speed);
+    if (a.sp === 'treefrog') return frogHop(a, dt);
     if (sp.kind === 'lake') {
       const dx = a.tx - a.x, step = speed * dt;
       if (Math.abs(dx) > 1) a.face = dx > 0 ? 1 : -1;
@@ -460,7 +515,7 @@
       }
       if (sp.active === 'night') {
         if (sp.kind === 'glow') { a.state = 'away'; return; }
-        if (a.state !== 'leaving') { a.state = 'leaving'; a.tx = sp.kind === 'ground' || a.x < WORLD.W / 2 ? -100 : WORLD.W + 100; a.ty = sp.kind === 'ground' ? landY(a) : GY - 320; a.slot = -1; a.pad = null; } // walkers always leave by land, never through the lake
+        if (a.state !== 'leaving') { a.state = 'leaving'; a.tx = sp.kind === 'ground' || a.x < WORLD.W / 2 ? -100 : WORLD.W + 100; a.ty = sp.kind === 'ground' ? landY(a) : a.sp === 'treefrog' ? GY - 4 : GY - 320; a.slot = -1; a.pad = null; } // walkers always leave by land, never through the lake
         if (moveToward(a, dt, sp.speed * 1.6)) a.state = 'away';
         return;
       }
@@ -800,25 +855,26 @@
     Draw.drawWaterFront(ctx, S.lake);
 
     highlightT += 1 / 60;
-    const hl = selectedSeed ? (PLANTS[selectedSeed].kind === 'water' ? 'water' : 'land') : null;
+    const hl = selectedSeed ? seedClass(selectedSeed) : null;
     const chopI = S.chop && S.animals.some(a => a.sp === 'beaver' && a.state === 'chopping') ? S.chop.slot : -1;
     const drawSlot = i => {
-      const water = isWaterSlot(i);
-      const row = (c, fn) => { c.save(); c.translate(0, water ? 0 : WORLD.PLANT_DY); fn(); c.restore(); }; // bushes and mounds sit on the plant row
+      const water = isWaterSlot(i), flower = isFlowerSlot(i);
+      const row = (c, fn) => { c.save(); c.translate(0, water ? 0 : flower ? WORLD.FLOWER_DY : WORLD.PLANT_DY); fn(); c.restore(); }; // bushes, mounds and patches sit on their row
       if (!slotOpen(i)) { if (isHover('bush', i)) drawGlow(hoverBox(hover), c => row(c, () => Draw.drawBush(c, slotX(i), t)), t); row(ctx, () => Draw.drawBush(ctx, slotX(i), t)); return; }
       const p = S.plants[i], x = slotX(i) + (i === chopI ? Math.sin(t * 42) * 1.6 : 0), y = slotY(i);
-      const spot = c => { if (water) Draw.drawWaterSpot(c, x, y, t, 0); else row(c, () => Draw.drawMound(c, x, 0)); };
+      const spot = c => { if (water) Draw.drawWaterSpot(c, x, y, t, 0); else if (flower) row(c, () => Draw.drawPatch(c, x)); else row(c, () => Draw.drawMound(c, x, 0)); };
       if (isHover(p ? 'plant' : 'empty', i)) drawGlow(hoverBox(hover), c => { if (!p || p.pending) { spot(c); if (!p) Draw.drawPlantButton(c, x, y, t, false); } else Draw.drawPlant(c, x, y, PLANTS[p.id], p, t, night); }, t);
-      if (!p) { spot(ctx); Draw.drawPlantButton(ctx, x, y, t, hl === (water ? 'water' : 'land')); }
+      if (!p) { spot(ctx); Draw.drawPlantButton(ctx, x, y, t, hl === slotClass(i)); }
       else if (p.pending) { spot(ctx); ctx.globalAlpha = 0.6 + 0.4 * Math.sin(t * 4); ctx.font = '18px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(PLANTS[p.id].emoji, x, y - 18); ctx.globalAlpha = 1; }
       else Draw.drawPlant(ctx, x, y, PLANTS[p.id], p, t, night);
     };
-    for (let i = WATER0; i < TOTAL_SLOTS; i++) drawSlot(i);
+    for (let i = WATER0; i < FLOWER0; i++) drawSlot(i);
 
     // Everything on land is painted back to front: people at the back, animals behind or in front of the plant row,
     // plants on the front row, and the camp nearest of all. Fliers and climbers go on top.
     const ents = [{ y: TENT_Y, tent: true }];
     for (let i = 0; i < WATER0; i++) ents.push({ y: PY, slot: i });
+    for (let i = FLOWER0; i < TOTAL_SLOTS; i++) ents.push({ y: FY, slot: i }); // flower patches: in front of the animals, behind the camp
     for (const f of fallen) ents.push({ y: PY + 0.5, fall: f });
     S.sticks.forEach((st, k) => ents.push({ y: STICK_Y, st, k }));
     for (const pe of S.people) ents.push({ y: pe.y, pe });
@@ -871,6 +927,7 @@
     if (a.state === 'play') y -= Math.abs(Math.sin(a.anim * 9)) * 6;
     if (a.state === 'chopping') y -= Math.abs(Math.sin(a.anim * 14)) * 3;
     if (moving && a.sp === 'frog') y -= Math.abs(Math.sin(a.anim * 7)) * 14;
+    if (a.sp === 'sloth' && a.path && a.path.phase === 1 && moving) { const vy = a.y - 41, x0 = a.path.x0, x1 = a.path.tx; c.strokeStyle = '#5a4a2a'; c.lineWidth = 3; c.lineCap = 'round'; c.beginPath(); c.moveTo(x0, vy - 6); c.quadraticCurveTo((x0 + x1) / 2, vy + 14, x1, vy - 6); c.stroke(); } // the vine it hangs from
     const ball = a.sp === 'armadillo' && ((moving && a.rolling) || (!moving && a.curled && a.state !== 'eating'));
     const hang = a.sp === 'bat' && a.state === 'sleep';
     if (hang) { c.save(); c.translate(0, 2 * (y - 40)); c.scale(1, -1); }
@@ -931,7 +988,7 @@
     if (!ptr || e.pointerId !== ptr.id) return;
     const dx = e.clientX - ptr.x, dy = e.clientY - ptr.y;
     if (Math.abs(dx) > 8 || Math.abs(dy) > 8) ptr.moved = true;
-    if (ptr.moved) { stopWatch(); cam.x = ptr.cx - dx / cam.scale; cam.oy = ptr.oy + dy; applyCam(); }
+    if (ptr.moved) { stopWatch(); settleY = false; cam.x = ptr.cx - dx / cam.scale; cam.oy = ptr.oy + dy; applyCam(); }
   });
   function pointerEnd(e) {
     pointers.delete(e.pointerId);
@@ -961,7 +1018,7 @@
 
   function hitTest(x, y) {
     const inBB = bb => bb && x >= bb.x && x <= bb.x + bb.w && y >= bb.y && y <= bb.y + bb.h;
-    const half = i => isWaterSlot(i) ? 36 : WORLD.SLOT_DX / 2;
+    const half = i => isWaterSlot(i) ? 36 : isFlowerSlot(i) ? 34 : WORLD.SLOT_DX / 2;
     const near = (i, by) => Math.abs(x - slotX(i)) <= half(i) && y > by - 70 && y < by + 46;
     // with a seed picked, an empty spot wins over an animal swimming or standing on it
     if (selectedSeed && S.seeds[selectedSeed]) {
@@ -980,7 +1037,15 @@
     if (S.dam.stage && Math.abs(x - WORLD.DAM_X) <= 22 && y > GY - 40 && y < GY + WORLD.LAKE_FLOOR) return { type: 'dam' };
     const sm = Draw.sunMoonPos(phase());
     if (Math.hypot(x - sm.x, y - sm.y) <= 48) return { type: 'sky', sun: sm.sun, body: sm.sun ? S.sun : S.moon, bb: { x: sm.x - 40, y: sm.y - 40, w: 80, h: 80 } };
-    for (let i = 0; i < TOTAL_SLOTS; i++) {
+    // the flower patches are nearest, so they get first pick, but only inside their own band
+    for (let i = FLOWER0; i < TOTAL_SLOTS; i++) {
+      if (Math.abs(x - slotX(i)) > half(i)) continue;
+      const p = S.plants[i];
+      if (!p) { if (near(i, FY)) return { type: 'empty', i }; continue; }
+      const m = Draw.plantMetrics(PLANTS[p.id], p.progress, p.level);
+      if (y > FY + m.topY - 10 && y < FY + 36) return { type: 'plant', i, p, m };
+    }
+    for (let i = 0; i < FLOWER0; i++) {
       if (Math.abs(x - slotX(i)) > half(i)) continue;
       const by = slotY(i);
       if (!slotOpen(i)) return (y > PY - 60 && y < PY + 40) ? { type: 'bush', i } : null;
@@ -1030,7 +1095,7 @@
       case 'stick': return '🪵 Stick · tap to pick up';
       case 'tent': return '⛺ Camp';
       case 'bush': return '🌿 Thick jungle';
-      case 'empty': return selectedSeed && S.seeds[selectedSeed] && seedFits(selectedSeed, h.i) ? `Plant ${PLANTS[selectedSeed].name} here!` : isWaterSlot(h.i) ? '🪷 Floating spot' : '🌱 Dirt spot';
+      case 'empty': return selectedSeed && S.seeds[selectedSeed] && seedFits(selectedSeed, h.i) ? `Plant ${PLANTS[selectedSeed].name} here!` : isWaterSlot(h.i) ? '🪷 Floating spot' : isFlowerSlot(h.i) ? '🌸 Flower patch' : '🌱 Tree spot';
       case 'plant': { const d = PLANTS[h.p.id], stars = ' ' + starText(h.p); return h.p.pending ? `${d.emoji} ${d.name} · planting…` : h.p.progress < 1 ? `${d.emoji} ${d.name}${stars} · ${Math.round(h.p.progress * 100)}%` : `${d.emoji} ${d.name}${stars}${d.fruit ? ` · ${h.p.fruit} ${d.fruit.name}${h.p.fruit === 1 ? '' : 's'}` : ' · grown'}`; }
     }
     return '';
@@ -1089,13 +1154,14 @@
       const d = PLANTS[k], n = S.seeds[k] || 0;
       const chip = document.createElement('button');
       chip.className = 'chip' + (selectedSeed === k ? ' sel' : '') + (n ? '' : ' empty');
-      chip.innerHTML = `<span class="em">${d.emoji}</span><span class="n">${n}</span>`; chip.setAttribute('aria-label', d.name);
+      const planted = S.plants.filter(p => p && p.id === k).length;
+      chip.innerHTML = `<span class="em">${d.emoji}</span><span class="n">${n}</span>${planted ? `<span class="pc" title="${planted} planted">${planted}</span>` : ''}`; chip.setAttribute('aria-label', `${d.name}: ${n} seeds, ${planted} planted`);
       chip.addEventListener('mouseenter', () => showTip(chip, seedTip(k))); chip.addEventListener('mouseleave', hideTip); chip.addEventListener('focus', () => showTip(chip, seedTip(k))); chip.addEventListener('blur', hideTip);
       chip.onclick = () => {
         Sound.init(); Sound.resume(); Sound.play('click');
         if (!n) { toast(`No ${d.name} seeds right now. Animals bring more!`); return; }
         selectedSeed = selectedSeed === k ? null : k; renderSeedBar();
-        if (selectedSeed) toast(d.kind === 'water' ? `${d.emoji} ${d.name} picked! Tap a floating spot in the lake. Grows in ${fmtTime(d.grow)}.` : `${d.emoji} ${d.name} picked! Tap a dirt spot or a ➕. Grows in ${fmtTime(d.grow)}.`, 3500);
+        if (selectedSeed) toast(d.kind === 'water' ? `${d.emoji} ${d.name} picked! Tap a floating spot in the lake. Grows in ${fmtTime(d.grow)}.` : d.kind === 'tree' ? `${d.emoji} ${d.name} picked! Tap a dirt spot in the back row or a ➕. Grows in ${fmtTime(d.grow)}.` : `${d.emoji} ${d.name} picked! Tap a flower patch out front or a ➕. Grows in ${fmtTime(d.grow)}.`, 3500);
       };
       bar.appendChild(chip);
     };
@@ -1255,38 +1321,7 @@
     const c = el('button', 'big', 'Close'); c.onclick = closeSheet; card.appendChild(c);
     openSheet(card, true);
   }
-  function slotName(i) { return isWaterSlot(i) ? `Lake spot ${i - WATER0 + 1}` : `Spot ${i + 1}`; }
-  function showPlantsSheet() {
-    const card = el('div', 'card'); card.appendChild(el('h2', null, '🌱 My Plants'));
-    const list = []; S.plants.forEach((p, i) => { if (p) list.push({ p, i }); });
-    const grown = list.filter(x => x.p.progress >= 1).length, growing = list.length - grown;
-    const freeLake = WORLD.LAKE_SLOTS.filter((x, k) => !S.plants[WORLD.MAX_SLOTS + k]).length;
-    const st = el('div', 'stats');
-    st.append(el('div', 'pill', `🌳 ${grown} grown`), el('div', 'pill', `🌿 ${growing} growing`), el('div', 'pill', `🕳️ ${emptyLandSlots()} dirt + ${freeLake} lake spots free`), el('div', 'pill', `🔓 ${S.unlocked.length} of ${Object.keys(PLANTS).length} seed kinds found`));
-    card.appendChild(st);
-    if (!list.length) card.appendChild(el('p', 'sub', 'Nothing planted yet. Tap a dirt spot to plant your first seed!'));
-    else {
-      const counts = {}; for (const { p } of list) counts[p.id] = (counts[p.id] || 0) + 1;
-      card.appendChild(el('p', 'sub', Object.keys(counts).map(k => `${PLANTS[k].emoji} ×${counts[k]}`).join('   ')));
-    }
-    const ul = el('div', 'booklist');
-    for (const { p, i } of list) {
-      const d = PLANTS[p.id], it = el('div', 'bookitem');
-      it.appendChild(el('div', 'q', d.emoji));
-      const tx = el('div', 'txt');
-      const b = el('b', null, d.name + ' '); b.appendChild(el('span', 'levelstars', starText(p))); tx.appendChild(b);
-      if (!p.pending && p.progress < 1) { const bar = el('div', 'grow'); const fill = el('div'); fill.style.width = Math.round(p.progress * 100) + '%'; bar.appendChild(fill); tx.appendChild(bar); }
-      tx.appendChild(el('span', null, plantStatus(p)));
-      tx.appendChild(el('span', null, `${slotName(i)} · Level ${p.level || 1}${p.day ? ` · planted Day ${p.day}` : ''}`));
-      it.appendChild(tx);
-      const go = el('button', 'small', '👀'); go.title = 'Show me'; go.onclick = () => { Sound.play('click'); closeSheet(); focusSlot(i); };
-      const ed = el('button', 'small', '✏️'); ed.title = 'Upgrade or replace'; ed.onclick = () => { Sound.play('click'); if (p.pending) toast(`${d.emoji} The ${d.name} seed is about to be planted.`); else showPlantSheet(i); };
-      it.append(go, ed); ul.appendChild(it);
-    }
-    card.appendChild(ul);
-    const c = el('button', 'big', 'Close'); c.onclick = closeSheet; card.appendChild(c);
-    openSheet(card, true);
-  }
+  function slotName(i) { return isWaterSlot(i) ? `Lake spot ${i - WATER0 + 1}` : isFlowerSlot(i) ? `Flower patch ${i - FLOWER0 + 1}` : `Tree spot ${i + 1}`; }
   function showClearSheet() {
     const card = el('div', 'card'); card.appendChild(el('h2', null, '🌿 Thick jungle!'));
     if (S.slotsOpen >= WORLD.MAX_SLOTS) { card.appendChild(el('p', 'sub', 'All the jungle is cleared already!')); }
@@ -1308,27 +1343,116 @@
     else Draw.drawCritter(c, { x: 0, y: sp.kind === 'lake' ? -10 : 0, sp: a.sp, acc: a.acc }, { c1: a.c1, c2: a.c2, t: 0, face: 1, size: 1 });
     c.restore(); return cv;
   }
-  function showBook() {
-    const card = el('div', 'card'); card.appendChild(el('h2', null, '📖 Jungle Book'));
+  // ---------- Jungle Book: animals, plants and people in one tabbed book ----------
+  function plantCanvas(p) {
+    const cv = el('canvas'); cv.width = 112; cv.height = 112; const c = cv.getContext('2d');
+    const d = PLANTS[p.id], water = d.kind === 'water';
+    c.fillStyle = water ? '#bfe3f7' : '#dff3d8'; c.fillRect(0, 0, 112, 112);
+    if (water) { c.fillStyle = '#3aa0e0'; c.fillRect(0, 78, 112, 34); }
+    const m = Draw.plantMetrics(d, p.progress, p.level), k = Math.min(1.6, 88 / Math.max(40, m.H));
+    c.save(); c.translate(56, water ? 80 : 100); c.scale(k, k); Draw.drawPlant(c, 0, 0, d, { ...p, pending: false }, 0, 0); c.restore();
+    return cv;
+  }
+  function personCanvas(pe) {
+    const cv = el('canvas'); cv.width = 112; cv.height = 112; const c = cv.getContext('2d');
+    c.fillStyle = '#dff3d8'; c.fillRect(0, 0, 112, 112); c.save(); c.translate(56, 100); c.scale(1.4, 1.4); Draw.drawPerson(c, 0, 0, pe, { t: 0, face: 1 }); c.restore();
+    return cv;
+  }
+  function bookCard(pic, title, lines, acts, hide) {
+    const it = el('div', 'bookcard' + (hide ? ' hide' : ''));
+    it.appendChild(typeof pic === 'string' ? el('div', 'q', pic) : pic);
+    const b = el('b'); if (typeof title === 'string') b.textContent = title; else b.appendChild(title); it.appendChild(b);
+    for (const ln of lines) if (ln) it.appendChild(typeof ln === 'string' ? el('span', null, ln) : ln);
+    if (acts && acts.length) { const row = el('div', 'acts'); row.append(...acts); it.appendChild(row); }
+    return it;
+  }
+  const progressBar = (n, total) => { const bar = el('div', 'progress'); const fill = el('div'); fill.style.width = Math.round(100 * n / Math.max(1, total)) + '%'; bar.appendChild(fill); return bar; };
+  function showBook(tab = 'animals') {
+    const card = el('div', 'card book'); card.dataset.wide = '1';
+    const head = el('div', 'bookhead'); head.appendChild(el('h2', null, '📖 Jungle Book'));
     const st = el('div', 'stats');
-    st.appendChild(el('div', 'pill', `📅 Day ${dayNum()}`)); st.appendChild(el('div', 'pill', `🌳 ${S.stats.grown} grown`)); st.appendChild(el('div', 'pill', `🌱 ${S.stats.seedsGot} seeds found`)); st.appendChild(el('div', 'pill', `👥 ${S.people.length}/${RULES.people.max} people`));
-    card.appendChild(st);
-    card.appendChild(el('h3', null, 'Your people'));
-    const pl = el('div', 'booklist');
-    for (const pe of S.people) { const it = el('div', 'bookitem'); const cv = el('canvas'); cv.width = 112; cv.height = 112; const c = cv.getContext('2d'); c.fillStyle = '#dff3d8'; c.fillRect(0, 0, 112, 112); c.save(); c.translate(56, 100); c.scale(1.4, 1.4); Draw.drawPerson(c, 0, 0, pe, { t: 0, face: 1 }); c.restore(); it.appendChild(cv); const tx = el('div', 'txt'); tx.appendChild(el('b', null, pe.name)); tx.appendChild(el('span', null, pe.task && pe.task.type === 'arrive' ? 'On the way!' : asleep(pe) ? 'Asleep in the tent 💤' : pe.task && pe.task.type === 'play' ? 'Playing 💛' : 'Explorer')); it.appendChild(tx); const wb = el('button', 'small', '👀'); wb.onclick = () => { closeSheet(); watchEntity(pe, true); }; const b = el('button', 'small', '✏️'); b.onclick = () => openSheet(buildCustomizer(pe, 'person', { title: `✏️ ${pe.name}` }), true); it.append(wb, b); pl.appendChild(it); }
-    card.appendChild(pl);
-    card.appendChild(el('h3', null, `Animals in your jungle (${S.animals.length})`));
-    const al = el('div', 'booklist');
-    if (!S.animals.length) al.appendChild(el('p', 'sub', 'No animals yet. Grow some trees and flowers!'));
-    for (const a of S.animals) { const sp = ANIMALS[a.sp]; const it = el('div', 'bookitem'); it.appendChild(miniCanvas(a)); const tx = el('div', 'txt'); tx.appendChild(el('b', null, a.name)); tx.appendChild(el('span', null, sp.name + (a.state === 'away' ? ' · comes back at night' : a.state === 'sleep' ? ' · sleeping' : ''))); it.appendChild(tx); const wb = el('button', 'small', '👀'); wb.disabled = a.state === 'away'; wb.onclick = () => { closeSheet(); watchEntity(a, false); }; const b = el('button', 'small', '✏️'); b.onclick = () => showAnimalSheet(a); it.append(wb, b); al.appendChild(it); }
-    card.appendChild(al);
-    const missing = Object.keys(ANIMALS).filter(k => !S.animals.some(a => a.sp === k));
-    card.appendChild(el('h3', null, `Still hiding (${missing.length})`));
-    const ml = el('div', 'booklist');
-    for (const k of missing) { const sp = ANIMALS[k]; const it = el('div', 'bookitem'); it.appendChild(el('div', 'q', sp.active === 'night' ? '🌙' : '❓')); const tx = el('div', 'txt'); tx.appendChild(el('b', null, '???')); tx.appendChild(el('span', null, sp.hint + (sp.active === 'night' ? ' (night)' : ''))); it.appendChild(tx); ml.appendChild(it); }
-    card.appendChild(ml);
-    const c = el('button', 'big', 'Close'); c.onclick = closeSheet; card.appendChild(c);
+    st.append(el('div', 'pill', `📅 Day ${dayNum()}`), el('div', 'pill', `🌳 ${S.stats.grown} grown`), el('div', 'pill', `🌱 ${S.stats.seedsGot} seeds found`), el('div', 'pill', `👥 ${S.people.length}/${RULES.people.max} people`));
+    head.appendChild(st); card.appendChild(head);
+    const tabs = el('div', 'tabs'), body = el('div', 'bookbody');
+    const allAnimals = Object.keys(ANIMALS), found = allAnimals.filter(k => S.animals.some(a => a.sp === k));
+    const planted = S.plants.filter(Boolean).length;
+    const defs = [['animals', `🐾 Animals ${found.length}/${allAnimals.length}`], ['plants', `🌱 Plants ${planted}/${TOTAL_SLOTS}`], ['people', `👥 People ${S.people.length}`]];
+    const render = which => {
+      tab = which; body.innerHTML = '';
+      for (const b of tabs.children) b.classList.toggle('on', b.dataset.tab === which);
+      if (which === 'animals') renderAnimalsTab(body, found, allAnimals);
+      else if (which === 'plants') renderPlantsTab(body);
+      else renderPeopleTab(body);
+    };
+    for (const [key, label] of defs) { const b = el('button', null, label); b.dataset.tab = key; b.onclick = () => { Sound.play('click'); render(key); }; tabs.appendChild(b); }
+    card.append(tabs, body);
+    const c = el('button', 'big close', 'Close'); c.onclick = closeSheet; card.appendChild(c);
+    render(tab);
     openSheet(card, true);
+  }
+  function renderAnimalsTab(body, found, all) {
+    body.appendChild(el('span', 'sub', `${found.length} of ${all.length} animals have visited your jungle`));
+    body.appendChild(progressBar(found.length, all.length));
+    const grid = el('div', 'bookgrid');
+    if (!S.animals.length) body.appendChild(el('p', 'sub', 'No animals yet. Grow some trees and flowers!'));
+    for (const a of S.animals) {
+      const sp = ANIMALS[a.sp];
+      const status = a.state === 'away' ? (sp.active === 'night' ? 'comes back at night' : 'comes back by day') : a.state === 'sleep' ? 'sleeping 💤' : a.state === 'eating' ? 'eating 😋' : a.state === 'play' ? 'playing 💛' : a.state === 'hang' ? 'hanging in a tree 🙌' : sp.kind === 'lake' && onShore(a) ? 'out on the land' : '';
+      const wb = el('button', 'small', '👀'); wb.title = 'Watch'; wb.disabled = a.state === 'away'; wb.onclick = () => { closeSheet(); watchEntity(a, false); };
+      const eb = el('button', 'small', '✏️'); eb.title = 'Name and dress up'; eb.onclick = () => showAnimalSheet(a);
+      grid.appendChild(bookCard(miniCanvas(a), a.name, [a.named ? sp.name : null, status], [wb, eb]));
+    }
+    body.appendChild(grid);
+    const missing = all.filter(k => !found.includes(k));
+    if (missing.length) {
+      body.appendChild(el('h3', null, `❓ Still hiding (${missing.length})`));
+      const mg = el('div', 'bookgrid');
+      for (const k of missing) { const sp = ANIMALS[k]; mg.appendChild(bookCard(sp.active === 'night' ? '🌙' : '❓', '???', [sp.hint + (sp.active === 'night' ? ' (at night)' : '')], null, true)); }
+      body.appendChild(mg);
+    }
+  }
+  function renderPlantsTab(body) {
+    const list = []; S.plants.forEach((p, i) => { if (p) list.push({ p, i }); });
+    const grown = list.filter(x => x.p.progress >= 1 && !x.p.pending).length, growing = list.length - grown;
+    const free = cls => { let n = 0; for (let i = 0; i < TOTAL_SLOTS; i++) if (slotClass(i) === cls && slotOpen(i) && !S.plants[i]) n++; return n; };
+    const st = el('div', 'stats');
+    st.append(el('div', 'pill', `🌳 ${grown} grown`), el('div', 'pill', `🌿 ${growing} growing`), el('div', 'pill', `🕳️ ${free('tree')} tree · ${free('flower')} flower · ${free('water')} lake spots free`));
+    body.appendChild(st);
+    const kinds = Object.keys(PLANTS);
+    body.appendChild(el('span', 'sub', `${S.unlocked.length} of ${kinds.length} seed kinds found`));
+    body.appendChild(progressBar(S.unlocked.length, kinds.length));
+    const row = el('div', 'seedrow');
+    for (const k of kinds) { const sp = el('span', S.unlocked.includes(k) ? '' : 'unknown', S.unlocked.includes(k) ? PLANTS[k].emoji : '❓'); sp.title = S.unlocked.includes(k) ? PLANTS[k].name : 'Not found yet'; row.appendChild(sp); }
+    body.appendChild(row);
+    if (!list.length) { body.appendChild(el('p', 'sub', 'Nothing planted yet. Tap a ➕ to plant your first seed!')); return; }
+    const section = (title, items) => {
+      if (!items.length) return;
+      body.appendChild(el('h3', null, title));
+      const grid = el('div', 'bookgrid');
+      for (const { p, i } of items) {
+        const d = PLANTS[p.id];
+        const name = d.emoji + ' ' + d.name, stars = el('span', 'levelstars', starText(p));
+        let bar = null; if (!p.pending && p.progress < 1) { bar = el('div', 'grow'); const fill = el('div'); fill.style.width = Math.round(p.progress * 100) + '%'; bar.appendChild(fill); }
+        const go = el('button', 'small', '👀'); go.title = 'Show me'; go.onclick = () => { Sound.play('click'); closeSheet(); focusSlot(i); };
+        const ed = el('button', 'small', '✏️'); ed.title = 'Upgrade or replace'; ed.onclick = () => { Sound.play('click'); if (p.pending) toast(`${d.emoji} The ${d.name} seed is about to be planted.`); else showPlantSheet(i); };
+        grid.appendChild(bookCard(p.pending ? d.emoji : plantCanvas(p), name, [stars, bar, plantStatus(p), `${slotName(i)}${p.day ? ` · Day ${p.day}` : ''}`], [go, ed]));
+      }
+      body.appendChild(grid);
+    };
+    section('🌳 Tree row', list.filter(x => slotClass(x.i) === 'tree'));
+    section('🌸 Flower patches', list.filter(x => slotClass(x.i) === 'flower'));
+    section('🪷 Lake', list.filter(x => slotClass(x.i) === 'water'));
+  }
+  function renderPeopleTab(body) {
+    body.appendChild(el('span', 'sub', S.people.length < RULES.people.max ? `A new friend arrives at sunrise until there are ${RULES.people.max}.` : 'Everyone is here!'));
+    const grid = el('div', 'bookgrid');
+    for (const pe of S.people) {
+      const status = pe.task && pe.task.type === 'arrive' ? 'On the way!' : asleep(pe) ? 'Asleep in the tent 💤' : pe.task && pe.task.type === 'play' ? 'Playing 💛' : pe.task && (pe.task.type === 'plant' || pe.task.type === 'planting') ? 'Planting 🌱' : 'Exploring';
+      const wb = el('button', 'small', '👀'); wb.title = 'Watch'; wb.onclick = () => { closeSheet(); watchEntity(pe, true); };
+      const b = el('button', 'small', '✏️'); b.title = 'Dress up'; b.onclick = () => openSheet(buildCustomizer(pe, 'person', { title: `✏️ ${pe.name}` }), true);
+      grid.appendChild(bookCard(personCanvas(pe), pe.name, [status], [wb, b]));
+    }
+    body.appendChild(grid);
   }
   function showMenu() {
     const card = el('div', 'card'); card.appendChild(el('h2', null, '🌴 Jungle Planting'));
@@ -1337,7 +1461,7 @@
     card.appendChild(snd);
     const how = el('div', 'howto');
     how.innerHTML = `<ul>
-      <li>🌱 <b>Tap a dirt spot</b> and pick a seed. One of your people walks over and plants it.</li>
+      <li>🌱 <b>Tap a dirt spot</b> and pick a seed. One of your people walks over and plants it. Trees go in the back row, flowers and bushes in the <b>flower patches</b> out front.</li>
       <li>🪷 Water lilies grow on the <b>floating spots in the lake</b>.</li>
       <li>☀️ Plants grow in the sun (${Math.round(WORLD.DAY / 60)} minutes of day), slower under the moon (${(WORLD.NIGHT / 60).toFixed(1).replace('.0', '')} minutes of night).</li>
       <li>🌧️ Rain makes plants grow faster and fills the lake.</li>
@@ -1355,7 +1479,8 @@
       <li>🐘 The elephant drinks from the lake, then <b>sprays water from its trunk</b>. Watered plants grow faster!</li>
       <li>💛 Now and then your people play with each other and with the animals. High fives, dances, tickles and nose boops!</li>
       <li>🐊 The crocodile climbs out to sun itself on the bank, the duck and otter walk on land too, and the armadillo rolls around as a ball.</li>
-      <li>🦍 The gorilla sometimes jumps up into a tree and hangs there, swinging.</li>
+      <li>🦍 The gorilla sometimes jumps up into a tree and hangs there, swinging. The sloth hangs its way along a vine from tree to tree, and the tree frog hops.</li>
+      <li>⌨️ On a keyboard, <b>Esc</b> closes a pop-up.</li>
       <li>🐸 Frogs hop onto the lily pads under the waterfall. Bats sleep in the cave by day, and the bear sleeps there at night.</li>
       <li>↩️ The small ↩️ button on a name card puts the look back to how it started (an animal then loses its name tag).</li>
       <li>🖱️ Point at a seed in the bar to see what it grows into and who loves it.</li>
@@ -1431,7 +1556,7 @@
     for (const k in ANIMALS) { const a = ANIMALS[k]; const nm = id => PLANTS[id] ? PLANTS[id].emoji : id; html += `<tr><td>${a.name}</td><td>${a.kind}${a.nearLake ? ' (lake)' : ''}</td><td>${a.active}</td><td>${a.max}</td><td>${a.hint}</td><td>${a.eats.map(nm).join(' ') || '—'}</td><td>${a.brings.map(nm).join(' ') || '—'}</td><td>${a.gift ? a.gift + 's' : '—'}</td><td>${a.chance != null ? pct(a.chance) : ''}${a.giftChance != null ? ` gift ${pct(a.giftChance)}` : ''}</td></tr>`; }
     const at = el('div'); at.innerHTML = html + '</table>'; card.appendChild(at);
     sec('🎛️ Console cheats (window.JP)', [
-      `<code>JP.skip(sec)</code> fast-forward · <code>JP.give(id, n)</code> seeds · <code>JP.focusSlot(i)</code> scroll to a spot (0–${WORLD.MAX_SLOTS - 1} land, ${WORLD.MAX_SLOTS}–${TOTAL_SLOTS - 1} lake) · <code>JP.state()</code> live save object · <code>JP.hitTest(x, y)</code> what a tap at world x,y would hit · <code>JP.save()</code> · <code>JP.play()</code> start a friendly play now · <code>JP.spawn('elephant')</code>`,
+      `<code>JP.skip(sec)</code> fast-forward · <code>JP.give(id, n)</code> seeds · <code>JP.focusSlot(i)</code> scroll to a spot (0–${WORLD.MAX_SLOTS - 1} trees, ${WATER0}–${FLOWER0 - 1} lake, ${FLOWER0}–${TOTAL_SLOTS - 1} flower patches) · <code>JP.state()</code> live save object · <code>JP.hitTest(x, y)</code> what a tap at world x,y would hit · <code>JP.save()</code> · <code>JP.play()</code> start a friendly play now · <code>JP.spawn('elephant')</code>`,
     ]);
     const c = el('button', 'big', 'Close'); c.onclick = closeSheet; card.appendChild(c);
     openSheet(card, true);
@@ -1441,13 +1566,12 @@
     const pe = S.people[0];
     openSheet(buildCustomizer(pe, 'person', { title: '🌴 Welcome to Jungle Planting!', subtitle: 'Name your explorer and pick a look!', doneLabel: 'Start planting! 🌱', onDone: () => {
       S.started = true; cam.x = pe.x - cam.viewW / 2; applyCam();
-      toast(`Tap a dirt spot to plant your first seed, ${pe.name}!`, 7000, { big: true });
+      toast(`Tap a ➕ to plant your first seed, ${pe.name}!`, 7000, { big: true });
       setTimeout(() => toast('👆 Swipe or use ◀ ▶ to look around. The lake is to the right! ➕ ➖ zoom.', 8000), 2500);
     } }), false);
   }
 
   $('btnBook').onclick = () => { Sound.init(); Sound.play('click'); showBook(); };
-  $('btnPlants').onclick = () => { Sound.init(); Sound.play('click'); showPlantsSheet(); };
   $('btnMenu').onclick = () => { Sound.init(); Sound.play('click'); showMenu(); };
   $('btnSound').onclick = () => { Sound.init(); Sound.resume(); S.muted = !S.muted; Sound.setMuted(S.muted); if (!S.muted) Sound.play('chime'); updateHud(); save(); };
 
@@ -1470,10 +1594,17 @@
     S = load() || newState();
     Sound.setMuted(S.muted);
     window.addEventListener('resize', resize); resize();
+    document.addEventListener('keydown', e => { // Esc backs out of whatever is open
+      if (e.key !== 'Escape') return;
+      if (sheetOpen) { if (sheetDismissable) { Sound.play('click'); closeSheet(); } }
+      else if (selectedSeed) { selectedSeed = null; renderSeedBar(); }
+      else if (watch) stopWatch();
+    });
     cam.x = S.people.length ? S.people[0].x - cam.viewW / 2 : 0; applyCam();
     renderSeedBar(); updateHud();
     document.addEventListener('visibilitychange', () => { if (document.hidden) save(); else lastFrame = performance.now(); });
     window.addEventListener('pagehide', save);
+    if (S.moved) { toast(`🌸 Your flowers and bushes moved to the new flower patches out front. The back row is for trees now!`, 9000, { big: true }); S.moved = 0; }
     if (S.migrated) { delete S.migrated; setTimeout(() => toast('🆕 The jungle is cosier now: 10 planting spots and 2 lake spots. Plants that no longer fit went back into your seed pocket.', 10000, { big: true }), 1500); }
     if (!S.started) showWelcome();
     else if (!S.tips.controls) { S.tips.controls = true; S.tips.plants = true; setTimeout(() => toast('🆕 New: ◀ ▶ scroll, ➕ ➖ zoom, water lilies in the lake, and tap a grown plant to upgrade it!', 9000, { big: true }), 1000); }
