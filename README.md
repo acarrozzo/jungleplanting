@@ -21,7 +21,7 @@ It is a static site, so any static host works. For Vercel: import the GitHub rep
 ## How to play
 
 - Tap a dirt spot and pick a seed. One of your people walks over and plants it.
-- Water lilies grow on the three floating spots in the lake. A waterfall feeds the lake at the far right, and frogs hop onto the lily pads.
+- Water lilies grow on the two floating spots in the lake. A waterfall feeds the lake at the far right, and frogs hop onto the lily pads.
 - Empty spots show a round + button. Tap it to plant there. Growing plants show a progress bar underneath, grown plants show their level stars.
 - A cave on the left: bats sleep in it by day and a bear sleeps in it at night.
 - A beaver comes when the lake is full and trees are grown. Trees drop sticks; tap them (or let the beaver fetch them) and it builds a dam in three stages that keeps the lake from draining. A full lake spills over the dam, and the otter slides down the waterfall.
@@ -36,12 +36,16 @@ It is a static site, so any static host works. For Vercel: import the GitHub rep
 - 📸 in the menu saves a picture of your jungle.
 - Days are 3 minutes, nights 1.5 minutes. Plants grow slower at night and faster in the rain. Rain also fills the lake.
 - Grown trees make fruit. Animals come to eat it and bring you seeds, including new kinds. Every new animal brings a welcome seed soon after it arrives.
-- The duck, otter and crocodile swim and also walk on land. The gorilla jumps up and hangs in the trees.
+- The duck, otter and crocodile swim and also walk on land. The gorilla jumps up and hangs in the trees, and when it drops down it eats a fruit from that tree and gives you its seed.
+- 🐆 The jaguar climbs trees at night and naps up in a tree all day.
+- 🦜 The parrot flies in when your first tree is grown and tells you the news in a speech bubble and out loud (after your first tap, and even at night): a plant fully grown, a new animal or seed, a new friend, dam stages, 3 stars, and the shark's catch. Close its name card and it says hello. The menu has a switch to turn the talking voices off (the squawks stay). Open `parrot-lab.html` (for example http://localhost:8787/parrot-lab.html) to hear 12 parrot voices and pick one with ⭐. Speech needs a real browser (Chrome or Safari); the Claude app's built-in browser pane stays silent.
+- 🐋 Three big goals: a grown tree on every tree spot, one of every kind of tree, and all 12 trees at 3 stars. Each one brings a whale show: a whale pops out of the lake to say "You did it!", then the cave and tent turn into a second lake for a moment with another whale. The Jungle Book's 🐋 Goals tab shows progress and replays a show.
+- 🦈 After the first whale show a shark swims into the lake. When it catches a fish you get a Water Lily seed (it always leaves at least one fish).
 - The first animals come for the starter trees and flowers. Bigger ones (sloth, tapir, owl, gorilla, jaguar, elephant) need more grown trees. The Jungle Book shows what each one is waiting for.
 - Tap a grown plant to make it bigger with spare seeds (up to level 3) or swap it for a new seed.
 - Tap the thick jungle to clear a new spot for 3 seeds. A new friend also arrives every sunrise (up to 5) and clears 2 spots.
 - Tap any person or animal to rename it and pick colors and a hat. The ↩️ button on a name card restores the original look. The sun and moon can be dressed up too, and their sheet can call the next sunset or sunrise early.
-- The 📖 Jungle Book has three tabs: Animals (who has visited and who is still hiding), Plants (every plant with its growth, fruit, level and spot, plus the seed kinds found so far) and People. Tap 👀 to jump to anything.
+- The 📖 Jungle Book has four tabs: Animals (who has visited and who is still hiding), Plants (every plant with its growth, fruit, level and spot, plus the seed kinds found so far), People, and 🐋 Goals. Tap 👀 to jump to anything.
 - On a keyboard, Esc closes any pop-up.
 - The seed bar groups seeds: trees first, then flowers, then lake plants. On a computer, point at a seed to see what it grows into and who loves it.
 - On a computer, point at anything and it glows softly with its name, handy when animals and plants overlap.
@@ -65,4 +69,6 @@ Open the browser console and type:
 
 - `JP.skip(120)` – fast-forward 120 seconds of game time
 - `JP.give('kapok', 3)` – get 3 seeds of any plant id from `js/data.js`
-- `JP.focusSlot(16)` – scroll to a planting spot (0–15 land, 16–18 lake)
+- `JP.focusSlot(12)` – scroll to a planting spot (0–11 tree spots, 12–13 lake, 14–19 flower patches)
+- `JP.whale('row')` – play a whale show (`row`, `kinds` or `stars`)
+- `JP.announce('Hello!')` – make the parrot say something

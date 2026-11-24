@@ -12,7 +12,16 @@ const Draw = (() => {
   function rrect(ctx, x, y, w, h, r, color) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fillStyle = color; ctx.fill(); }
   function line(ctx, x1, y1, x2, y2, color, w) { ctx.strokeStyle = color; ctx.lineWidth = w; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
   function poly(ctx, pts, color) { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath(); ctx.fillStyle = color; ctx.fill(); }
+  // While a face wearing glasses is drawn, eye() notes where each eye lands (in canvas pixels), so the glasses can sit on the real eyes.
+  let eyeLog = null;
+  function watchEyes(acc) { eyeLog = acc === 'glasses' ? [] : null; }
+  function seenEyes(ctx) { // the noted eyes, in the coordinates ctx draws in now
+    const log = eyeLog; eyeLog = null; if (!log || !log.length) return null;
+    const m = ctx.getTransform(), inv = m.inverse(), k = Math.hypot(m.a, m.b) || 1;
+    return log.map(e => { const p = inv.transformPoint(new DOMPoint(e.x, e.y)); return { x: p.x, y: p.y, r: e.r / k }; });
+  }
   function eye(ctx, x, y, r, closed, iris) {
+    if (eyeLog) { const m = ctx.getTransform(), p = m.transformPoint(new DOMPoint(x, y)); eyeLog.push({ x: p.x, y: p.y, r: r * (Math.hypot(m.a, m.b) || 1) }); }
     if (closed) { ctx.strokeStyle = '#222'; ctx.lineWidth = Math.max(1, r * 0.5); ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(x, y, r, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke(); return; }
     circ(ctx, x, y, r, '#fff');
     if (iris) circ(ctx, x + r * 0.2, y, r * 0.7, iris);
@@ -84,6 +93,7 @@ const Draw = (() => {
   }
   // body: { c1, c2, acc } chosen by the player
   function drawSunMoonAt(ctx, x, y, body, sun, t) {
+    watchEyes(body && body.acc);
     const c1 = (body && body.c1) || (sun ? '#ffd84a' : '#f2f4ff'), c2 = (body && body.c2) || (sun ? '#fff2a8' : '#d6dbf0');
     const g = ctx.createRadialGradient(x, y, 20, x, y, sun ? 90 : 80);
     g.addColorStop(0, sun ? 'rgba(255,230,120,0.55)' : 'rgba(220,230,255,0.35)'); g.addColorStop(1, 'rgba(255,255,255,0)');
@@ -96,12 +106,12 @@ const Draw = (() => {
       circ(ctx, x, y, 34, c1); circ(ctx, x - 8, y - 8, 10, c2);
       eye(ctx, x - 10, y - 4, 4, false); eye(ctx, x + 10, y - 4, 4, false); smile(ctx, x, y + 6, 10);
       ctx.globalAlpha = 0.5; circ(ctx, x - 17, y + 6, 4, '#ff9f6e'); circ(ctx, x + 17, y + 6, 4, '#ff9f6e'); ctx.globalAlpha = 1;
-      if (body) drawAccessory(ctx, body.acc, x, y, 30);
+      if (body) drawAccessory(ctx, body.acc, x, y, 30, 1, seenEyes(ctx));
     } else {
       circ(ctx, x, y, 30, c1);
       circ(ctx, x - 9, y - 6, 6, c2); circ(ctx, x + 8, y + 8, 4, c2); circ(ctx, x + 6, y - 12, 3, c2);
       eye(ctx, x - 9, y + 2, 3, true); eye(ctx, x + 9, y + 2, 3, true); smile(ctx, x, y + 8, 7);
-      if (body) drawAccessory(ctx, body.acc, x, y, 27);
+      if (body) drawAccessory(ctx, body.acc, x, y, 27, 1, seenEyes(ctx));
     }
   }
   function drawSunMoon(ctx, phase, t, sunBody, moonBody) {
@@ -212,10 +222,12 @@ const Draw = (() => {
   // --- the camp: a tent the people sleep in, and a little campfire that burns at night ---
   const CAMP_K = 1.1; // the camp is nearest the camera, so it is drawn a touch bigger
   function campSpace(ctx) { ctx.save(); ctx.translate(WORLD.TENT_X, WORLD.GROUND_Y + WORLD.TENT_DY); ctx.scale(CAMP_K, CAMP_K); }
-  function drawTent(ctx, t, night, sleepers) {
+  // fade < 1 while the whale show turns the camp into a lake for a moment
+  function drawTent(ctx, t, night, sleepers, fade = 1) {
+    if (fade <= 0) return;
     campSpace(ctx); // local coordinates: tent base centre at 0,0
     const gy = -6, x = 0, by = 0, w = 58, h = 82;
-    ctx.globalAlpha = 0.22; ell(ctx, x, by + 1, w + 12, 7, '#000'); ctx.globalAlpha = 1;
+    ctx.globalAlpha = 0.22 * fade; ell(ctx, x, by + 1, w + 12, 7, '#000'); ctx.globalAlpha = fade;
     // guy ropes and pegs
     line(ctx, x - w * 0.55, by - h * 0.45, x - w - 16, by + 2, '#e6d5ac', 1.5); line(ctx, x + w * 0.55, by - h * 0.45, x + w + 16, by + 2, '#e6d5ac', 1.5);
     rect(ctx, x - w - 18, by - 3, 3, 7, '#6b4320'); rect(ctx, x + w + 15, by - 3, 3, 7, '#6b4320');
@@ -226,37 +238,37 @@ const Draw = (() => {
     // doorway, lit from inside when someone is asleep in there
     const warm = sleepers > 0 && night > 0.2;
     poly(ctx, [[x - 21, by], [x, by - h * 0.74], [x + 21, by]], warm ? '#5a3418' : '#3a2415');
-    if (warm) { ctx.globalAlpha = 0.55 + 0.1 * Math.sin(t * 3); poly(ctx, [[x - 15, by], [x, by - h * 0.6], [x + 15, by]], '#ffcf70'); ctx.globalAlpha = 1; }
+    if (warm) { ctx.globalAlpha = (0.55 + 0.1 * Math.sin(t * 3)) * fade; poly(ctx, [[x - 15, by], [x, by - h * 0.6], [x + 15, by]], '#ffcf70'); ctx.globalAlpha = fade; }
     poly(ctx, [[x - 21, by], [x, by - h * 0.74], [x - 12, by - 14], [x - 16, by]], '#ffc78a'); // rolled-back flaps
     poly(ctx, [[x + 21, by], [x, by - h * 0.74], [x + 12, by - 14], [x + 16, by]], '#ffc78a');
     // pole and flag
     line(ctx, x, by - h - 16, x, by - h + 4, '#6b4320', 3);
     poly(ctx, [[x, by - h - 16], [x + 17, by - h - 11 + Math.sin(t * 3) * 2], [x, by - h - 6]], '#ffd21f');
-    if (sleepers > 0) drawZzz(ctx, x + 14, by - h * 0.72, t);
+    if (sleepers > 0 && fade >= 1) drawZzz(ctx, x + 14, by - h * 0.72, t);
     // campfire: a ring of stones, two logs, and flames once it gets dark
     const fx = x + 84, fy = gy + 9;
     for (let k = 0; k < 5; k++) ell(ctx, fx - 12 + k * 6, fy + (k % 2) * 2, 4, 3, k % 2 ? '#8a8a84' : '#a5a59c');
     line(ctx, fx - 9, fy - 2, fx + 9, fy - 7, '#6b4320', 4); line(ctx, fx + 9, fy - 2, fx - 9, fy - 7, '#8a5a2b', 4);
     if (night > 0.05) {
       const f = 0.85 + 0.15 * Math.sin(t * 11);
-      ctx.globalAlpha = Math.min(1, night * 3);
+      ctx.globalAlpha = Math.min(1, night * 3) * fade;
       poly(ctx, [[fx - 8, fy - 5], [fx - 3 + Math.sin(t * 9) * 2, fy - 26 * f], [fx + 1, fy - 13], [fx + 5 + Math.sin(t * 7) * 2, fy - 21 * f], [fx + 8, fy - 5]], '#ff8c1a');
       poly(ctx, [[fx - 4, fy - 5], [fx + Math.sin(t * 13) * 1.5, fy - 15 * f], [fx + 4, fy - 5]], '#ffe066');
-      ctx.globalAlpha = 1;
     }
+    ctx.globalAlpha = 1;
     ctx.restore();
   }
   // warm light painted after the night tint, so the camp glows in the dark
-  function drawCampGlow(ctx, t, night) {
-    if (night <= 0.05) return;
-    campSpace(ctx);
+  function drawCampGlow(ctx, t, night, fade = 1) {
+    if (night <= 0.05 || fade <= 0) return;
+    campSpace(ctx); ctx.globalAlpha = fade;
     const fx = 84, fy = -10, r = 74 + Math.sin(t * 9) * 4;
     const g = ctx.createRadialGradient(fx, fy, 0, fx, fy, r);
     g.addColorStop(0, `rgba(255,190,90,${0.5 * night})`); g.addColorStop(1, 'rgba(255,190,90,0)');
     ctx.fillStyle = g; ctx.fillRect(fx - r, fy - r, r * 2, r * 2);
     const f = 0.85 + 0.15 * Math.sin(t * 11), y0 = 3;
     poly(ctx, [[fx - 4, y0 - 5], [fx + Math.sin(t * 13) * 1.5, y0 - 15 * f], [fx + 4, y0 - 5]], '#ffe066');
-    ctx.restore();
+    ctx.globalAlpha = 1; ctx.restore();
   }
   // little thought bubble with an emoji, shown over people and animals while they play
   function drawBubble(ctx, emoji, x, y, t) {
@@ -388,6 +400,65 @@ const Draw = (() => {
     poly(ctx, [[xl, wy], [lx + 50, fl], [WORLD.W + 400, fl], [WORLD.W + 400, wy]], '#4fb4f0');
     ctx.globalAlpha = 1;
     line(ctx, xl, wy, WORLD.W + 400, wy, '#e8f7ff', 2);
+  }
+
+  // --- the whale show: a big friendly whale head pops out of a lake to say "You did it!" ---
+  // rise 0..1 lifts it out of the water (it is clipped at the lake floor); face 1 looks right, -1 looks left
+  const WHALE_K = 1.25; // the whales are drawn a bit bigger than life so they read well with the camera zoomed out
+  function drawWhale(ctx, x, wy, rise, t, face = 1) {
+    if (rise <= 0) return;
+    const floor = WORLD.GROUND_Y + WORLD.LAKE_FLOOR, bob = Math.sin(t * 1.8) * 2.5 * rise;
+    const body = '#3f78b5', dark = '#2f5f93', belly = '#d3e9f8';
+    ctx.save(); ctx.beginPath(); ctx.rect(x - 170, -3000, 340, floor + 3000); ctx.clip();
+    ctx.translate(x, wy + (1 - rise) * 190 + bob); ctx.scale(face * WHALE_K, WHALE_K);
+    ctx.save(); ctx.translate(-34, 22); ctx.rotate(-0.5 + Math.sin(t * 4) * 0.45); ell(ctx, -16, 0, 22, 8, dark); ctx.restore(); // a flipper waving under the water
+    ctx.beginPath(); ctx.moveTo(-60, 170); ctx.lineTo(-60, -38); ctx.quadraticCurveTo(-60, -90, -8, -92); ctx.quadraticCurveTo(54, -92, 62, -36); ctx.quadraticCurveTo(68, 10, 62, 60); ctx.lineTo(62, 170); ctx.closePath(); // the body carries on down into the water
+    ctx.fillStyle = body; ctx.fill();
+    ctx.globalAlpha = 0.35; ell(ctx, -36, -46, 16, 34, dark, 0.15); ctx.globalAlpha = 1; // shade on the back of the head
+    ctx.beginPath(); ctx.moveTo(-44, 170); ctx.quadraticCurveTo(-40, -4, 6, -8); ctx.quadraticCurveTo(58, -10, 61, 4); ctx.lineTo(62, 170); ctx.closePath(); ctx.fillStyle = belly; ctx.fill(); // throat
+    for (let k = 0; k < 5; k++) line(ctx, -24 + k * 17, 2 - (k === 0 ? -4 : 0), -29 + k * 17, 160, '#a9cde8', 2); // throat grooves
+    ctx.strokeStyle = '#1e3f66'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(6, -12); ctx.quadraticCurveTo(38, 2, 60, -14); ctx.stroke(); // big smile
+    circ(ctx, 26, -40, 9, '#fff'); circ(ctx, 28, -39, 5.5, '#1a2b44'); circ(ctx, 26.5, -41, 2, '#fff');
+    ctx.globalAlpha = 0.45; ell(ctx, 44, -22, 7, 4, '#ff8fb0'); ctx.globalAlpha = 1; // rosy cheek
+    if (rise > 0.75) { // the spout from the blowhole
+      const k = (rise - 0.75) / 0.25;
+      for (let i = 0; i < 12; i++) {
+        const ph = (t * 1.3 + i / 12) % 1, side = (i % 3) - 1;
+        ctx.globalAlpha = k * (1 - ph * 0.7);
+        circ(ctx, -14 + side * 30 * ph, -94 - 80 * ph + 70 * ph * ph, 4 * (1 - ph * 0.4), i % 2 ? '#dff4ff' : '#bfe6ff');
+      }
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+  // for a few seconds of the whale show the cave and camp make way for a second lake on the left
+  const LEFT_SHORE = 300;
+  function leftLakeY() { return waterY(0.9); }
+  function drawLeftLake(ctx, k, t, whaleRise) {
+    if (k <= 0) return;
+    const gy = WORLD.GROUND_Y, fl = gy + WORLD.LAKE_FLOOR, rx = LEFT_SHORE, wy = leftLakeY(), xr = rx - (wy - gy) / WORLD.LAKE_FLOOR * 70;
+    ctx.save(); ctx.globalAlpha = k;
+    const g = ctx.createLinearGradient(0, gy, 0, fl); g.addColorStop(0, '#8a6a3e'); g.addColorStop(1, '#4d3a24');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(rx, gy - 1); ctx.lineTo(rx - 70, fl); ctx.lineTo(-400, fl); ctx.lineTo(-400, gy - 1); ctx.closePath(); ctx.fill();
+    poly(ctx, [[rx, gy], [rx - 70, fl], [rx - 90, fl], [rx - 25, gy]], '#a68556'); // sandy slope
+    const w = ctx.createLinearGradient(0, wy, 0, fl); w.addColorStop(0, '#3aa0e0'); w.addColorStop(1, '#1f6fae');
+    ctx.globalAlpha = 0.9 * k; ctx.fillStyle = w; ctx.beginPath(); ctx.moveTo(xr, wy); ctx.lineTo(rx - 70, fl); ctx.lineTo(-400, fl); ctx.lineTo(-400, wy); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    drawWhale(ctx, 140, wy, whaleRise, t, 1);
+    ctx.save(); ctx.globalAlpha = 0.35 * k; poly(ctx, [[xr, wy], [rx - 70, fl], [-400, fl], [-400, wy]], '#4fb4f0');
+    ctx.globalAlpha = k; line(ctx, -400, wy, xr, wy, '#e8f7ff', 2);
+    for (let i = 0; i < 6; i++) { const x = 20 + i * 42 + Math.sin(t * 1.5 + i) * 6; ctx.globalAlpha = k * (0.35 + 0.25 * Math.sin(t * 2 + i * 1.7)); line(ctx, x, wy + 6 + (i % 3) * 7, x + 16, wy + 6 + (i % 3) * 7, '#dff4ff', 2); }
+    ctx.restore();
+  }
+  // a speech bubble whose tail points down at (x, y): the parrot's news and the whale's "You did it!"
+  function drawSpeech(ctx, text, x, y, size = 13) {
+    ctx.font = `bold ${size}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const w = ctx.measureText(text).width + size * 1.5, h = size * 2.2, top = y - 8 - h;
+    ctx.globalAlpha = 0.97;
+    ctx.beginPath(); ctx.roundRect(x - w / 2, top, w, h, h * 0.45); ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.strokeStyle = 'rgba(27,42,29,0.35)'; ctx.lineWidth = 1.5; ctx.stroke();
+    poly(ctx, [[x - 7, top + h - 1], [x + 5, top + h - 1], [x - 1, y]], '#fff');
+    ctx.globalAlpha = 1; ctx.fillStyle = '#1b2a1d'; ctx.fillText(text, x, top + h / 2 + 1);
   }
 
   // --- plants ---
@@ -627,8 +698,29 @@ const Draw = (() => {
   }
 
   // --- accessories (hats etc) ---
-  function drawAccessory(ctx, id, hx, hy, hr, face = 1) {
+  // round glasses on the real eyes: a lens on each eye, a bridge between them, and an arm back to the ear
+  // (both arms out to the sides on a face that looks straight at us, like the sun, the moon or the owl)
+  function drawGlasses(ctx, eyes, hx, hy, hr, face) {
+    const es = eyes.slice(0, 2).sort((a, b) => a.x - b.x), r0 = Math.max(...es.map(e => e.r));
+    let R = r0 * 1.6;
+    if (es.length === 2) { const d = Math.hypot(es[1].x - es[0].x, es[1].y - es[0].y); R = Math.max(r0 * 1.3, Math.min(R, d * 0.56)); }
+    const lw = Math.max(0.8, r0 * 0.45), col = '#1b1b1b';
+    ctx.save(); ctx.lineCap = 'round';
+    for (const e of es) { ctx.globalAlpha = 0.22; circ(ctx, e.x, e.y, R, '#e8f6ff'); ctx.globalAlpha = 1; ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.beginPath(); ctx.arc(e.x, e.y, R, 0, TAU); ctx.stroke(); }
+    if (es.length === 2) { const [a, b] = es, d = Math.hypot(b.x - a.x, b.y - a.y) || 1, ux = (b.x - a.x) / d, uy = (b.y - a.y) / d; if (d > 2 * R) line(ctx, a.x + ux * R, a.y + uy * R, b.x - ux * R, b.y - uy * R, col, lw); }
+    const mx = es.reduce((n, e) => n + e.x, 0) / es.length, my = es.reduce((n, e) => n + e.y, 0) / es.length;
+    if (es.length === 2 && Math.abs(mx - hx) < hr * 0.3) { // facing us: an arm out each side
+      line(ctx, es[0].x - R, es[0].y, Math.min(es[0].x - R - 1, hx - hr * 0.98), my - R * 0.3, col, lw);
+      line(ctx, es[1].x + R, es[1].y, Math.max(es[1].x + R + 1, hx + hr * 0.98), my - R * 0.3, col, lw);
+    } else { // side on: one arm from the back lens toward the ear
+      const dir = mx >= hx ? 1 : -1, back = dir > 0 ? es[0] : es[es.length - 1], ex = hx - dir * hr * 0.55;
+      if ((back.x - dir * R - ex) * dir > 0) line(ctx, back.x - dir * R, back.y, ex, back.y - R * 0.25, col, lw);
+    }
+    ctx.restore();
+  }
+  function drawAccessory(ctx, id, hx, hy, hr, face = 1, eyes = null) {
     if (!id || id === 'none') return;
+    if (id === 'glasses' && eyes && eyes.length) { drawGlasses(ctx, eyes, hx, hy, hr, face); return; }
     ctx.save(); ctx.translate(hx, hy); ctx.scale(face, 1);
     switch (id) {
       case 'cap': ctx.beginPath(); ctx.arc(0, -hr * 0.55, hr * 1.02, Math.PI, 0); ctx.fillStyle = '#e53935'; ctx.fill(); rrect(ctx, -hr * 0.2, -hr * 0.62, hr * 1.7, hr * 0.28, 3, '#b71c1c'); circ(ctx, 0, -hr * 1.55, hr * 0.15, '#b71c1c'); break;
@@ -646,6 +738,7 @@ const Draw = (() => {
   // --- people ---
   // p: {skin, shirt, pants, hair, acc}; o: {t, moving, face, planting, closed}
   function drawPerson(ctx, x, y, p, o) {
+    watchEyes(p.acc);
     ctx.save(); ctx.translate(x, y); ctx.scale(o.face || 1, 1);
     const sw = o.moving ? Math.sin(o.t * 11) * 7 : 0;
     const squash = o.planting ? 0.85 : 1;
@@ -660,7 +753,7 @@ const Draw = (() => {
     eye(ctx, 3, -58, 2.2, o.closed); eye(ctx, 7.5, -58, 2.2, o.closed);
     smile(ctx, 5, -54, 3);
     ctx.restore();
-    drawAccessory(ctx, p.acc, x, y - 58 * squash, 11, o.face || 1);
+    drawAccessory(ctx, p.acc, x, y - 58 * squash, 11, o.face || 1, seenEyes(ctx));
   }
 
   // --- critters --- each returns {hx,hy,hr}: head position for accessories (in local coords, facing right)
@@ -878,7 +971,29 @@ const Draw = (() => {
     poly(ctx, [[-2, -20], [-1, -17], [0, -20]], '#fff'); poly(ctx, [[2, -20], [1, -17], [0, -20]], '#fff');
     return { hx: 0, hy: -24, hr: 6.5 };
   };
+  // pose: 'climb' = going up a trunk head first, 'down' = coming down, 'lounge' = lying along a branch up in a tree
   C.jaguar = (ctx, o) => {
+    if (o.pose === 'lounge') return jaguarLounge(ctx, o);
+    if (o.pose === 'climb') { ctx.translate(8, -26); ctx.rotate(-Math.PI / 2); jaguarBody(ctx, { ...o, moving: true }); return { hx: -22, hy: -48, hr: 10 }; }
+    if (o.pose === 'down') { ctx.translate(-8, -26); ctx.rotate(Math.PI / 2); jaguarBody(ctx, { ...o, moving: true }); return { hx: 22, hy: -4, hr: 10 }; }
+    return jaguarBody(ctx, o);
+  };
+  function jaguarLounge(ctx, o) {
+    const { c1, c2 } = o, sw = Math.sin(o.t * 1.6), dark = shade(c1, -15);
+    line(ctx, -46, 5, 42, -1, '#5a3a1e', 7); line(ctx, -46, 4, 42, -2, '#7a5230', 2.5); // the branch it lies on
+    ell(ctx, -44, 1, 8, 3.5, '#3f8f3a', 0.5); ell(ctx, 40, -5, 8, 3.5, '#2e8b3a', -0.5);
+    ctx.strokeStyle = c1; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-22, -6); ctx.quadraticCurveTo(-32 + sw * 4, 12, -27 + sw * 7, 30); ctx.stroke(); // tail hanging down, swishing
+    circ(ctx, -27 + sw * 7, 30, 2.6, c2);
+    rrect(ctx, -15, -3, 6, 16 + sw * 1.5, 3, dark); rrect(ctx, 9, -3, 6, 14, 3, dark); // a back leg and a front leg dangling over the branch
+    ell(ctx, -1, -8, 24, 9, c1);
+    for (let i = 0; i < 7; i++) { ctx.strokeStyle = c2; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(-16 + i * 5.2, -11 + (i % 2) * 4, 2.2, 0, TAU); ctx.stroke(); }
+    rrect(ctx, 14, -6, 14, 5, 2.5, shade(c1, 15)); // front paws folded on the branch, chin resting on them
+    circ(ctx, 24, -13, 9.5, c1); poly(ctx, [[17, -18], [17, -26], [22, -21]], c1); poly(ctx, [[30, -19], [30, -27], [25, -21]], c1);
+    ell(ctx, 28, -10, 4.5, 3, shade(c1, 50)); circ(ctx, 31, -11, 1.5, '#222');
+    eye(ctx, 22, -15, 2.2, o.closed, '#7bd34a'); eye(ctx, 28, -15, 2.2, o.closed, '#7bd34a');
+    return { hx: 24, hy: -13, hr: 9.5 };
+  }
+  function jaguarBody(ctx, o) {
     const { c1, c2 } = o; const sw = o.moving ? Math.sin(o.t * 10) * 5 : 0;
     ctx.strokeStyle = c1; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-22, -20); ctx.quadraticCurveTo(-36, -22, -34, -34); ctx.stroke();
     rrect(ctx, -18 + sw, -12, 6, 12, 2, c1); rrect(ctx, 10 - sw, -12, 6, 12, 2, c1);
@@ -889,6 +1004,26 @@ const Draw = (() => {
     ell(ctx, 26, -27, 5, 3.5, shade(c1, 50)); circ(ctx, 29, -29, 1.6, '#222');
     eye(ctx, 20, -32, 2.4, o.closed, '#7bd34a'); eye(ctx, 27, -32, 2.4, o.closed, '#7bd34a');
     return { hx: 22, hy: -30, hr: 10 };
+  }
+  // a friendly cartoon shark; its fin pokes out of the water. pose 'hunt' = jaws ready, 'chomp' = jaws wide open
+  C.shark = (ctx, o) => {
+    const { c1, c2 } = o, tw = Math.sin(o.t * (o.moving ? 9 : 4)) * 4, dark = shade(c1, -18);
+    const open = o.pose === 'chomp' ? 1 : o.pose === 'hunt' ? 0.35 : 0;
+    poly(ctx, [[-30, -2], [-50, -17 + tw], [-43, -1 + tw * 0.3], [-50, 13 + tw], [-30, 3]], dark); // tail
+    poly(ctx, [[-11, -9], [-1, -31], [12, -9]], dark); // the fin that shows above the water
+    ell(ctx, 0, 0, 37, 11.5, c1);
+    ctx.beginPath(); ctx.ellipse(3, 2, 30, 7.5, 0, 0, Math.PI); ctx.fillStyle = c2; ctx.fill(); // pale belly
+    poly(ctx, [[0, 5], [-10, 17], [11, 7]], dark); // side fin
+    for (let k = 0; k < 3; k++) line(ctx, 15 + k * 3.5, -5, 14 + k * 3.5, 3, shade(c1, -35), 1.2); // gills
+    if (open > 0) {
+      poly(ctx, [[21, 3], [38, -2 - open * 7], [38, 7 + open * 8]], '#7a2433');
+      for (let k = 0; k < 3; k++) { poly(ctx, [[25 + k * 4, 1 - open * 1.5], [27 + k * 4, 1 - open * 1.5], [26 + k * 4, 4]], '#fff'); poly(ctx, [[25 + k * 4, 5 + open * 2], [27 + k * 4, 5 + open * 2], [26 + k * 4, 2.5]], '#fff'); }
+    } else {
+      ctx.strokeStyle = '#2b3a48'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(28, -1, 7, 0.35, 1.5); ctx.stroke(); // a big friendly grin
+      poly(ctx, [[29, 5], [31, 5], [30, 7.5]], '#fff'); poly(ctx, [[25, 5.5], [27, 5.5], [26, 7.8]], '#fff');
+    }
+    eye(ctx, 25, -4, 2.4, o.closed);
+    return { hx: 26, hy: -4, hr: 8 };
   };
   C.treefrog = (ctx, o) => {
     const { c1, c2 } = o;
@@ -996,11 +1131,13 @@ const Draw = (() => {
   function drawCritter(ctx, a, o) {
     const fn = C[a.sp]; if (!fn) return null;
     const face = o.face || 1;
+    watchEyes(a.acc);
     ctx.save(); ctx.translate(a.x, a.y); ctx.scale(face * (o.size || 1), o.size || 1);
     const h = fn(ctx, o);
     ctx.restore();
+    const eyes = seenEyes(ctx);
     const hx = a.x + h.hx * face * (o.size || 1), hy = a.y + h.hy * (o.size || 1), hr = h.hr * (o.size || 1);
-    drawAccessory(ctx, a.acc, hx, hy, hr, face);
+    drawAccessory(ctx, a.acc, hx, hy, hr, face, eyes);
     return { hx, hy, hr };
   }
 
@@ -1029,5 +1166,5 @@ const Draw = (() => {
     ctx.fillStyle = '#fff'; ctx.fillText(text, x, y);
   }
 
-  return { setView, ell, circ, rect, rrect, line, poly, eye, smile, shade, lerpColor, seeded, nightFactor, drawSky, drawStars, drawSunMoon, drawClouds, drawFarJungle, drawGround, drawBush, drawMound, drawCave, drawCliff, drawFalls, drawStick, drawDam, drawLilyPad, drawPlantButton, sunMoonPos, drawSunMoonAt, waterY, drawLakeBasin, drawSeaweed, drawWater, drawWaterFront, plantMetrics, drawPlant, drawWaterSpot, levelScale, star, drawLevelStars, drawAccessory, drawPerson, drawCritter, drawFireflies, drawZzz, drawLabel, drawTent, drawCampGlow, drawBubble, drawPatch };
+  return { setView, ell, circ, rect, rrect, line, poly, eye, smile, shade, lerpColor, seeded, nightFactor, drawSky, drawStars, drawSunMoon, drawClouds, drawFarJungle, drawGround, drawBush, drawMound, drawCave, drawCliff, drawFalls, drawStick, drawDam, drawLilyPad, drawPlantButton, sunMoonPos, drawSunMoonAt, waterY, drawLakeBasin, drawSeaweed, drawWater, drawWaterFront, plantMetrics, drawPlant, drawWaterSpot, levelScale, star, drawLevelStars, drawAccessory, drawPerson, drawCritter, drawFireflies, drawZzz, drawLabel, drawTent, drawCampGlow, drawBubble, drawPatch, drawWhale, drawLeftLake, leftLakeY, drawSpeech, LEFT_SHORE };
 })();

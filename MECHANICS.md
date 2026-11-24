@@ -18,13 +18,14 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 - **Depth.** Lower on screen means nearer. Measured in units below the ground line: people walk at 0 to 6 (the back), animals behind the plants at 9 to 15, the plant row is at 22, animals in front of the plants at 28 to 36, then the level stars and grow bars (46) and + buttons (52), and the camp at 84. Everything on land is painted back to front in one pass, and drawn from 90% size at the back to 112% at the front. An animal visiting a plant (to eat, be watered, chop) stands in front of it. A wandering animal picks the front or back lane 50/50 each trip and drifts between them as it walks. Birds, climbers and bugs are always on top. Lane numbers live in `WORLD.LANES` and `WORLD.PLANT_DY`.
 - A day is 180 s of daylight plus 90 s of night (270 s). A new jungle starts 25 s into Day 1. The day number is `floor(t / 270) + 1`; when it changes, sunrise happens.
 - Game time only advances while the page is open, no sheet is showing and the game is not paused. The ⏸️ button pauses; switching apps or tabs pauses automatically. There is no offline growth.
-- Autosave every 5 s and whenever the tab hides, to `localStorage` under `junglePlanting.save.v1` (save format version 5). Older saves are migrated on load. Version 4 → 5: flowers and bushes that were on the tree row move to the flower patches (extras are refunded as seeds, upgrade seeds included), pending seeds go back in the pocket, and every animal finds a new perch. Version 2 (16 + 3 spots): the first 12 land plants and 2 lake plants are kept and the rest refunded as seeds, including the seeds spent on their levels. Version 3 (10 + 2 spots): the lake plants move to the new lake indexes and people and animals are put back on their lanes.
+- Autosave every 5 s and whenever the tab hides, to `localStorage` under `junglePlanting.save.v1` (save format version 5). If a save exists but cannot be loaded, it is copied to `junglePlanting.save.v1.backup` before the new jungle's first autosave replaces it (a warning is logged in the console). Older saves are migrated on load. Version 4 → 5: flowers and bushes that were on the tree row move to the flower patches (extras are refunded as seeds, upgrade seeds included), pending seeds go back in the pocket, and every animal finds a new perch. Version 2 (16 + 3 spots): the first 12 land plants and 2 lake plants are kept and the rest refunded as seeds, including the seeds spent on their levels. Version 3 (10 + 2 spots): the lake plants move to the new lake indexes and people and animals are put back on their lanes.
 
 ## Customizing
 
 - People, animals, the sun and the moon each have a name card with colors and a hat. Its ↩️ button restores the original look: a person's birth colors (stored on the person when they arrive), an animal's species colors and default name, the sun's and moon's defaults. An animal wears a permanent name tag only while its look or name differs from the default, so a reset removes the tag.
 - Pointing the mouse at a seed chip shows its name and how many are planted, grouped by level stars. The pick toast on touch tells how long the seed takes to grow.
-- The colour rows on a person's card run skin, hair, shirt, pants.
+- The colour rows on a person's card run skin, hair, shirt, pants. Shirts and pants have 10 colours, including white and black.
+- Glasses sit on the real eyes: while a face with glasses is drawn, `eye()` notes where each eye lands, and the lenses, bridge and arm are drawn around those spots (one arm back to the ear on a side-on face, an arm out each side on a face looking straight at us, like the sun, moon or owl).
 
 ## Sun and moon
 
@@ -83,8 +84,9 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 - Every 15 s the game checks every species in order. A species may arrive if it is below its `max`, none of its members is away, it is its active time of day, and its `req` function returns true for the current stats (grown counts per plant id, total grown trees, grown fruit trees, grown flowers including lilies, lake level, which species are present).
 - Each eligible species arrives with 45% chance per check, or its own `chance` for rare ones (elephant 10%, jaguar 10%). At most 2 species arrive per check.
 - Panda: comes when 2 bamboo are grown, eats bamboo, brings bamboo and berry seeds.
+- Shark: comes after the first whale show (lake 50%+, fish swimming), with a 60% chance per check.
 - Requirements are tiered for 10 land spots: the four starter trees and two flowers bring the first wave (toucan, parrot, hummingbird, butterflies, bees, monkey, lake animals). Bear and tree frog need 3 grown trees, tapir, owl and armadillo 4 (bat: 4 fruit trees), sloth and gorilla 5, jaguar 6, elephant 7.
-- Animals never leave for good once they have arrived.
+- Animals never leave for good once they have arrived (fish the shark catches are the one exception; new fish keep coming). The Jungle Book counts every species that has ever visited (`seen` in the save).
 
 ### Behaviour by kind
 
@@ -92,7 +94,7 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 - **climber** sits in a canopy (the tree frog sits lower on the trunk). Neither flies: the sloth climbs to vine height, hangs its way across hand over hand along a vine drawn between the two trees (3× speed while arriving or leaving), then climbs down into the new canopy; the tree frog travels in hops of up to 70 units with a short rest between them, and arrives and leaves along the ground.
 - **bug** hovers at flowers and lilies.
 - Animals can carry a `size` factor (elephant 1.3×) that scales the drawing, hit box and trunk-spray origin.
-- **ground** walks in from the left along the ground, and always leaves by the left edge too (night animals used to exit through the lake when they were on the right half). The gorilla ends 40% of its trips (`RULES.gorilla.hangChance`) by walking under a grown tree (any tree but bamboo), jumping up and hanging from the low canopy for 5 to 10 s (`hangTime`), swinging and sometimes waving, then dropping back down; it lets go early at dusk or if the tree is removed. The armadillo rolls into an armoured ball for 60% of its trips (2.4× speed) and stays curled up for 30% of its rests, peeking out. Capybara and frog prefer the lake shore. The frog hops (55% of the time it picks a target) onto a lily pad or a grown water lily and sits there at the water line.
+- **ground** walks in from the left along the ground, and always leaves by the left edge too (night animals used to exit through the lake when they were on the right half). The gorilla ends 40% of its trips (`RULES.gorilla.hangChance`) by walking under a grown tree (any tree but bamboo), jumping up and hanging from the low canopy for 5 to 10 s (`hangTime`), swinging and sometimes waving, then dropping back down; it lets go early at dusk or if the tree is removed. It prefers trees with fruit, and when it lands under a tree that has fruit it eats one (`RULES.gorilla.snackChance`, 100%) and you get a seed of that tree. The jaguar climbs too: at night 35% of its idle moments (`RULES.jaguar.climbChance`) it walks to a leafy tree (not bamboo, palm or papaya), climbs the trunk head first and lounges on a branch for 8 to 15 s, then climbs down. At sunrise, instead of leaving, it climbs the nearest leafy tree and naps there until sunset (Zzz), then wakes, stretches and climbs down. If no tree is left it leaves like other night animals. The gorilla and jaguar never share a tree. The armadillo rolls into an armoured ball for 60% of its trips (2.4× speed) and stays curled up for 30% of its rests, peeking out. Capybara and frog prefer the lake shore. The frog hops (55% of the time it picks a target) onto a lily pad or a grown water lily and sits there at the water line.
 - **lake** swims in the lake, fish at a random depth. Three swimmers are amphibious (`amphibious` = share of trips that go onto land, `shore` = how far from the lake they walk): crocodile 40% / 190 units (suns itself in front of the plants), duck 40% / 340 (waddles on orange legs), otter 35% / 260 (trots on four short legs, and only starts a waterfall slide from the water). On land they join the depth-sorted pass, pick a lane like ground animals (duck and otter behind or in front of the plants) and splash when they cross the shoreline. Each lake species keeps to a zone of the open water (0 = shore, 1 = falls): turtle 0 to 0.3, duck 0.15 to 0.6, crocodile 0.55 to 0.85, otter 0.85 to 1, fish anywhere. When the otter gets bored it rides the waterfall down into the plunge pool 45% of the time.
 - **bug** picks a lily only 30% of the time so the pond does not fill with bees and butterflies.
 - **glow** is the fireflies, which appear at a flower.
@@ -101,7 +103,7 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 ### Day and night
 
 - Animals whose `home` is `cave` (bat, bear) head for the cave when they go off duty and sleep there. Bats hang upside down from the roof by day; the bear sleeps there at night. Tapping the cave says who is inside.
-- Day animals fall asleep where they are at night and show Zzz. Night animals leave at sunrise (flying or walking off at 1.6× speed), wait off screen, and come back at sunset. "Both" animals stay around the clock. Fireflies simply vanish and reappear.
+- Day animals fall asleep where they are at night and show Zzz. Night animals leave at sunrise (flying or walking off at 1.6× speed), wait off screen, and come back at sunset. The jaguar is the exception: it naps up in a tree all day. "Both" animals stay around the clock. Fireflies simply vanish and reappear.
 
 ### Seeds (gifts)
 
@@ -113,7 +115,28 @@ A plain-language map of every mechanic, for whoever is tuning the game. The numb
 - A gift is a new kind 75% of the time if the animal knows a kind you have not unlocked, otherwise a random kind from its `brings` list. New kinds trigger the big "NEW SEED" toast.
 - Safety net: with zero land seeds and at least one empty land spot for 75 s, a grown fruit plant (or "the wind") drops a seed, and every gift chance becomes 100% until you have one.
 
-### Sounds
+### Parrot news
+
+- The parrot comes with the first grown tree: the first bit of news by day brings it flying in to tell it (it also arrives the normal way once a tree is grown). It announces news in a speech bubble over its head, with a squawk and a squeaky spoken voice (the device's built-in speech, pitched up; silent when the sound is muted, cut off on pause). It then flies to the tree the news is about, or the grown tree nearest to it. At night it wakes just long enough to say the news (eyes open, no Zzz) and stays on its perch. Closing the parrot's name card makes it say "Hello! I'm <name>!", a quick way to check the voice.
+- **The parrot's voice.** A browser voice cannot be run through sound effects, so the parrot mixes a synthesized squawk (two buzzy oscillators bent in pitch, a fast flutter for rasp, light distortion and two sliding "beak" resonances), an optional squawky babble (one honk per syllable, shaped by its vowel) and the device's own voice, often one of the fun Mac and iPad voices (Albert, Junior, Fred, Ralph, Bahh, Grandpa) pitched up. The "copycat" styles echo the name at the end the way parrots do ("Mango Tree fully grown! Mango Tree! Mango Tree!"). There are 12 numbered styles in `Sound.PARROT_STYLES` (`js/audio.js`); `RULES.parrot.voice` picks the game's default (1, the squeaky squawker: a squawk, a very high voice, a rising squawk; picked by the family). **`parrot-lab.html`** plays every style and its ⭐ button saves a choice for that browser (`junglePlanting.parrotVoice` in localStorage), which the game uses instead of the default. A device without the named voice uses its normal voice for that style. The parrot's ambient call is the same synthesized squawk.
+- **Talking voices switch.** The menu has "🗣️ Talking voices are on — turn off" (saved as `voices`, on by default and for older saves). Off silences every spoken word, the parrot's news and the whales' "You did it!", but keeps the squawks, whale song and all other sounds, plus the speech bubbles. Turning it back on makes the parrot voice say "Voices on!" right away. The 🔊 sound button still silences everything.
+- Browsers only allow speech after a real tap on the page. Until then the parrot shows its bubble without talking. The first tap unlocks speech (Safari needs a word spoken inside the tap, so a silent one is), and if an utterance ever sits there without starting for 2.5 s, the next one clears the queue first so speech cannot jam. The Claude app's built-in browser pane does not play speech at all; use Chrome or Safari.
+- News: a plant fully grown ("Mango Tree fully grown!"), an animal's first ever visit ("A Tapir is here!"), a new seed kind, "Welcome, <name>!" after naming a new friend, each dam stage, a plant reaching 3 stars, and the shark's catch.
+- "Fully grown" also posts as a message from the parrot ("🦜 Kiwi: …"); without an awake parrot it falls back to the usual "🌟 Your … is fully grown!" message. The other news keeps its usual message either way.
+- At most 3 bits of news wait in line (`RULES.parrot.queue`), each shown for 3.8 s, and the parrot stays quiet during a whale show. A parrot that is still flying in waits up to 5 s to land before it talks. `JP.announce('text')` makes it talk.
+
+## Tree goals and the whale show
+
+- Three goals (only grown trees on open tree spots count): a grown tree on all 12 tree spots, one of every kind of tree growing at once (10 kinds), and all 12 trees at 3 stars. They are checked every second. The first time each goal is reached it plays the whale show; `whale` in the save remembers which are done and how many shows have finished.
+- The show lasts 19 s and the game keeps running underneath. A whale head rises out of the lake and says "You did it!" (a speech bubble, a low whale song, a deep spoken voice and confetti). Then the cave and the camp fade away and a lake appears in their place, where a second whale says it too. Both whales sink, the cave and camp come back, and the camera returns to where it was. On screens 900 px or wider the camera zooms all the way out so both lakes are in view; on narrower screens it glides from the right lake to the left one. People and walking animals standing where the pop-up lake is are hidden while it is there. Tapping a whale makes it say it again.
+- The Jungle Book has a 🐋 Goals tab with progress for each goal (which tree kinds are growing, for the kinds goal) and a 🐋 button that replays a finished show. `JP.whale('row' | 'kinds' | 'stars')` plays one from the console.
+
+## Shark
+
+- Arrives after the first whale show (lake 50%+, fish swimming). It cruises with only its fin above the water and a big friendly grin.
+- Every 35 to 70 s (`RULES.shark.huntEvery`) it chases one fish at 2.4× speed, jaws open, giving up after 12 s. It only hunts while at least 2 fish swim (`minFish`), so the lake never runs out. A catch: "CHOMP!", bubbles, and 1 🪷 Water Lily seed. New fish arrive as usual, taking the first free name.
+
+## Sounds
 
 - Each species may have a `sound`. Every 4 to 9 s one awake animal with a sound calls, 70% of the time; otherwise a generic chirp by day.
 
@@ -137,7 +160,7 @@ The save is the whole state object: time, lake, rain timers, seeds per kind, unl
 
 ## Debug console (`window.JP`)
 
-`JP.skip(sec)` fast-forwards game time. `JP.give(id, n)` grants seeds. `JP.focusSlot(i)` scrolls to a spot (0 to 15 land, 16 to 18 lake). `JP.state()` returns the live save object. `JP.hitTest(x, y)` says what a tap at world coordinates would hit. `JP.dev()` opens the Under the hood page. `JP.step()` draws one frame when the tab is hidden and animation is paused.
+`JP.skip(sec)` fast-forwards game time. `JP.give(id, n)` grants seeds. `JP.focusSlot(i)` scrolls to a spot (0 to 11 tree spots, 12 to 13 lake, 14 to 19 flower patches). `JP.state()` returns the live save object. `JP.hitTest(x, y)` says what a tap at world coordinates would hit. `JP.dev()` opens the Under the hood page. `JP.step()` draws one frame when the tab is hidden and animation is paused. `JP.tick(dt)` runs one whole frame (game, whale show, camera, drawing). `JP.whale(goal)` plays a whale show and `JP.announce(text)` makes the parrot talk.
 
 ## Elephant watering
 

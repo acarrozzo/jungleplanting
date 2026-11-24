@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Parrot voice lab · Jungle Planting</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
+  <style>
+    :root { --green: #2e8b3a; --ink: #1b2a1d; --soft: #4a5a4c; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, sans-serif; background: linear-gradient(180deg, #bfe6ff, #dff3d8 60%); color: var(--ink); min-height: 100vh; }
+    main { max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; }
+    h1 { margin: 0 0 6px; font-size: 30px; }
+    .lead { margin: 0 0 18px; color: var(--soft); font-size: 16px; line-height: 1.45; max-width: 46em; }
+    .phrase { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: #fff; border-radius: 18px; padding: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); margin-bottom: 18px; }
+    .phrase input { flex: 1 1 260px; font: inherit; font-size: 18px; font-weight: 700; border: 2px solid #e3ecdf; border-radius: 12px; padding: 10px 12px; }
+    .chip { font: inherit; font-size: 14px; font-weight: 700; border: none; background: #eef6ea; color: var(--ink); border-radius: 999px; padding: 8px 12px; cursor: pointer; }
+    .chip:hover { background: #e0efd9; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+    .card { background: #fff; border: 3px solid transparent; border-radius: 20px; padding: 14px; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+    .card.picked { border-color: #ffd21f; box-shadow: 0 0 0 3px rgba(255,210,31,0.35), 0 2px 10px rgba(0,0,0,0.08); }
+    .num { grid-row: span 3; width: 48px; height: 48px; border-radius: 50%; background: var(--green); color: #fff; font-size: 22px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+    .card h2 { margin: 0; font-size: 18px; }
+    .about { margin: 0; color: var(--soft); font-size: 14px; line-height: 1.35; }
+    .missing { margin: 0; font-size: 12px; color: #b35c00; }
+    .acts { grid-column: 1 / -1; display: flex; gap: 8px; margin-top: 8px; }
+    .acts button { flex: 1; font: inherit; font-size: 16px; font-weight: 800; border: none; border-radius: 14px; padding: 12px 8px; cursor: pointer; }
+    .hear { background: var(--green); color: #fff; }
+    .hear:active { transform: scale(0.97); }
+    .use { background: #f3f6f1; color: var(--ink); }
+    .card.picked .use { background: #fff4c2; }
+    .foot { margin-top: 22px; color: var(--soft); font-size: 14px; line-height: 1.5; }
+    .foot a { color: var(--green); font-weight: 700; }
+    .foot button { font: inherit; font-size: 14px; border: none; background: none; color: var(--green); font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>🦜 Parrot voice lab</h1>
+    <p class="lead">Tap <b>Hear it</b> to listen to each parrot voice. Tap <b>⭐ Use in the game</b> on your favourite and the parrot will talk like that in the game on this computer. Tell Claude the number to make it the parrot's voice everywhere (iPad too).</p>
+
+    <div class="phrase">
+      <input id="phrase" value="Mango Tree fully grown!" aria-label="What the parrot says">
+      <button class="chip" data-say="Mango Tree fully grown!">🥭 Mango grown</button>
+      <button class="chip" data-say="A Tapir is here!">🐾 New animal</button>
+      <button class="chip" data-say="New seed! Fig Tree!">🌱 New seed</button>
+      <button class="chip" data-say="Hello! I'm Kiwi!">👋 Hello</button>
+    </div>
+
+    <div class="grid" id="grid"></div>
+
+    <p class="foot">
+      No sound? Turn the volume up and use Chrome or Safari (the Claude app's built-in browser can't speak).
+      Some voices (Albert, Junior, Fred…) come with Macs and iPads; if a device doesn't have one, that parrot uses the normal voice instead.<br>
+      <button id="reset">Go back to the game's default voice</button> · <a href="./">🌴 Back to the jungle</a>
+    </p>
+  </main>
+
+  <script src="js/data.js"></script>
+  <script src="js/audio.js"></script>
+  <script>
+    (() => {
+      const KEY = 'junglePlanting.parrotVoice';
+      const grid = document.getElementById('grid'), phrase = document.getElementById('phrase');
+      const picked = () => { const v = parseInt(localStorage.getItem(KEY), 10); return v > 0 ? v : RULES.parrot.voice; };
+      const wake = () => { Sound.init(); Sound.resume(); };
+
+      function render() {
+        grid.innerHTML = '';
+        Sound.PARROT_STYLES.forEach((st, i) => {
+          const n = i + 1, card = document.createElement('div');
+          card.className = 'card' + (picked() === n ? ' picked' : '');
+          const missing = st.voice && !Sound.findVoice(st.voice);
+          card.innerHTML = `<div class="num">${n}</div><h2>${st.name}</h2><p class="about">${st.about}</p>${missing ? `<p class="missing">${st.voice} isn't on this device, so this one uses the normal voice.</p>` : '<p class="missing"></p>'}
+            <div class="acts"><button class="hear">▶️ Hear it</button><button class="use">${picked() === n ? '⭐ In the game' : '☆ Use in the game'}</button></div>`;
+          card.querySelector('.hear').onclick = () => { wake(); Sound.hush(); Sound.parrotSay(phrase.value || 'Squawk!', n); };
+          card.querySelector('.use').onclick = () => { wake(); localStorage.setItem(KEY, String(n)); render(); Sound.parrotSay('Hello! I talk like this now!', n); };
+          grid.appendChild(card);
+        });
+      }
+      document.querySelectorAll('.chip').forEach(c => c.onclick = () => { phrase.value = c.dataset.say; });
+      document.getElementById('reset').onclick = () => { localStorage.removeItem(KEY); render(); };
+      render();
+      if ('speechSynthesis' in window) speechSynthesis.addEventListener('voiceschanged', render); // voices load a moment after the page
+    })();
+  </script>
+</body>
+</html>
